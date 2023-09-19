@@ -1,0 +1,28 @@
+﻿{
+  "configurations": [
+    {
+      "name": "Linux-arm-himix200",
+      "generator": "Unix Makefiles",
+      "configurationType": "Debug",
+      "cmakeExecutable": "/usr/bin/cmake",
+      "remoteCopySourcesExclusionList": [ ".vs", ".git", "out" ],
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "cmakeToolchain": "/home/lujy/work/hisi/cameraapp/3516.toolchain.cmake",
+      "inheritEnvironments": [ "linux_arm" ],
+      "remoteMachineName": "1248595968;192.168.64.128 (username=lujy, port=22, authentication=Password)",
+      "remoteCMakeListsRoot": "$HOME/.vs/${projectDirName}/${workspaceHash}/src",
+      "remoteBuildRoot": "$HOME/.vs/${projectDirName}/${workspaceHash}/out/build/${name}",
+      "remoteInstallRoot": "$HOME/.vs/${projectDirName}/${workspaceHash}/out/install/${name}",
+      "remoteCopySources": true,
+      "rsyncCommandArgs": "-t --delete --delete-excluded",
+      "remoteCopyBuildOutput": false,
+      "remoteCopySourcesMethod": "rsync",
+      "addressSanitizerRuntimeFlags": "detect_leaks=0",
+      "intelliSenseMode": "linux-gcc-arm",
+      "remoteCopyUseCompilerDefaults": true,
+      "remoteCopyAdditionalIncludeDirectories": []
+    }
+  ]
+}

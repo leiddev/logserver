@@ -1,0 +1,7 @@
+*.o
+mscore/
+build/
+.vs/
+out/
+*.tgz
+.vscode/
