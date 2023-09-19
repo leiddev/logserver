@@ -13,6 +13,7 @@ SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)   #导出clangd需要的文件，用于智
  
 #set compile flags
 #add_definitions(-std=c++11 -g -rdynamic)
+set(CMAKE_CXX_FLAGS "-Wno-psabi")
 #set(CMAKE_CXX_FLAGS "-g3 -rdynamic -std=c++11")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -fsanitize=address -fno-omit-frame-pointer -fsanitize=leak")
 #set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
