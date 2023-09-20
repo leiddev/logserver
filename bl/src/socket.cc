@@ -413,4 +413,25 @@ int Socket::Close() {
   return 0;
 }
 
+int Socket::Recvfrom(unsigned char *Buf, int BufSize, char *ServerIp, int *Port) {
+  sockaddr_in Addr;
+  socklen_t AddrLen;
+  int RecvLen = 0;
+  if (_socket_fd == -1) {
+    LOG_ERR("socket no alive error.");
+    return -1;
+  }
+
+  if (ServerIp && Port) {
+    bzero(&Addr, sizeof(Addr));
+    AddrLen = 20;
+    RecvLen = recvfrom(_socket_fd, Buf, BufSize, 0, (sockaddr *)&Addr, &AddrLen);
+    memcpy(ServerIp, inet_ntoa(Addr.sin_addr), std::strlen(inet_ntoa(Addr.sin_addr)));
+    *Port = ntohs(Addr.sin_port);
+    // printf("srcip = %s, AddrLen = %d \n", inet_ntoa(Addr.sin_addr), AddrLen);
+  } else {
+    RecvLen = recvfrom(_socket_fd, Buf, BufSize, 0, NULL, NULL);
+  }
+  return RecvLen;
+}
 }  // namespace bl

@@ -32,6 +32,7 @@ class Socket {
   int SetSocketPort(int port);
   int SetSocketFd(int fd);
   int Close();
+  int Recvfrom(unsigned char* Buf, int BufSize, char* ServerIp = nullptr, int* Port = nullptr);
 
  private:
   int _port;

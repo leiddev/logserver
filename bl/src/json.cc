@@ -31,7 +31,7 @@ JSON::JSON(const JSON &parent, const string &pos) {
 }
 
 // move constructor
-JSON::JSON(JSON&& parent) {
+JSON::JSON(JSON &&parent) {
   _root = parent._root;
   parent._root = nullptr;
 }
@@ -140,11 +140,15 @@ void JSON::ToString(string &s) const {
   free(json);
 }
 
-string JSON::ToString() const {
+string JSON::ToString(bool formatted) const {
   std::stringstream ss;
+  char *json = NULL;
   if (!_root)
     return "err";
-  char *json = cJSON_Print((cJSON *)_root);
+  if (formatted)
+    json = cJSON_Print((cJSON *)_root);
+  else
+    json = cJSON_PrintUnformatted((cJSON *)_root);
   ss << json;
   free(json);
   return ss.str();
@@ -175,9 +179,9 @@ int JSON::CreateArray(const string &path, const string &name, vector<JSON> &arra
 
   cJSON *arrayItem = cJSON_CreateArray();
   cJSON_AddItemToObject(item, name.c_str(), arrayItem);
-  for(int i=0; i < array.size(); i++)
-    cJSON_AddItemToArray(arrayItem, cJSON_Duplicate((cJSON*)(array[i]._root), 1));
-  
+  for (int i = 0; i < array.size(); i++)
+    cJSON_AddItemToArray(arrayItem, cJSON_Duplicate((cJSON *)(array[i]._root), 1));
+
   return 0;
 }
 
@@ -190,9 +194,9 @@ int JSON::CreateArrayRoot(vector<JSON> &array) {
     return -1;
   }
 
-  for(int i=0; i < array.size(); i++)
-    cJSON_AddItemToArray((cJSON *)_root, cJSON_Duplicate((cJSON*)(array[i]._root), 1));
-  
+  for (int i = 0; i < array.size(); i++)
+    cJSON_AddItemToArray((cJSON *)_root, cJSON_Duplicate((cJSON *)(array[i]._root), 1));
+
   return 0;
 }
 
@@ -203,7 +207,7 @@ int JSON::CreateIntArray(const string &path, const string &name, const int *numb
 
   cJSON *intArray = cJSON_CreateIntArray(numbers, count);
   cJSON_AddItemToObject(item, name.c_str(), intArray);
-  
+
   return 0;
 }
 
@@ -214,7 +218,7 @@ int JSON::CreateFloatArray(const string &path, const string &name, const float *
 
   cJSON *intArray = cJSON_CreateFloatArray(numbers, count);
   cJSON_AddItemToObject(item, name.c_str(), intArray);
-  
+
   return 0;
 }
 
@@ -225,7 +229,7 @@ int JSON::CreateDoubleArray(const string &path, const string &name, const double
 
   cJSON *intArray = cJSON_CreateDoubleArray(numbers, count);
   cJSON_AddItemToObject(item, name.c_str(), intArray);
-  
+
   return 0;
 }
 
@@ -236,7 +240,7 @@ int JSON::CreateStringArray(const string &path, const string &name, const char *
 
   cJSON *intArray = cJSON_CreateStringArray(strings, count);
   cJSON_AddItemToObject(item, name.c_str(), intArray);
-  
+
   return 0;
 }
 
@@ -493,7 +497,7 @@ bool JSON::GetBool(const string &pos, bool dft) const {
       val = false;
     } else if (item->type == cJSON_True) {
       val = true;
-    } 
+    }
   }
 
   return val;
@@ -509,9 +513,9 @@ int JSON::SetBool(const string &pos, bool value) {
     return -1;
 
   if (value) {
-    item->type= cJSON_True;
+    item->type = cJSON_True;
   } else {
-    item->type= cJSON_False;
+    item->type = cJSON_False;
   }
 
   return 0;

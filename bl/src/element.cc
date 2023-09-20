@@ -23,8 +23,9 @@ int Element::Init() {
   _parameter.GetArray("/src_pad_config", src_pads);
 
   unsigned src_nums = src_pads.size();
-  size_t queue_size = _parameter.GetInt("/queue_size", 1);
+
   for (unsigned i = 0; i < src_nums; i++) {
+    size_t queue_size = src_pads[i].GetInt("/queue_size", 1);
     Pad *pad = new Pad(pad_type::PAD_TYPE_SRC, queue_size);
     _src_pads.push_back(pad);
   }
@@ -34,11 +35,11 @@ int Element::Init() {
   unsigned sink_nums = sink_pads.size();
 
   for (unsigned i = 0; i < sink_nums; i++) {
+    size_t queue_size = sink_pads[i].GetInt("/queue_size", 1);
     Pad *pad = new Pad(pad_type::PAD_TYPE_SINK, queue_size);
     _sink_pads.push_back(pad);
   }
-  LOG_INFO("{} src_pads:{}, sinkc_pads:{}", Name().c_str(), src_nums,
-           sink_nums);
+  LOG_INFO("{} src_pads:{}, sinkc_pads:{}", Name().c_str(), src_nums, sink_nums);
   return 0;
 }
 
@@ -106,11 +107,26 @@ Pad *Element::GetSinkPad(unsigned int index) {
   return _sink_pads[index];
 }
 
+void Element::PushSrcPad(unsigned int index, sptrPackage pack) {
+  if (index >= _src_pads.size())
+    return;
+  return _src_pads[index]->PushData(pack);
+}
+
+sptrPackage Element::PopSinkPad(unsigned int index, int to) {
+  if (index >= _sink_pads.size())
+    return nullptr;
+  if (to < 0)
+    return _sink_pads[index]->PopData();
+  else
+    return _sink_pads[index]->PopData(to);
+}
+
 int Element::Process() {
   int err = 0;
   using bl::sleep;
   for (;;) {
-    LOG_INFO("{}:Base class, overwrite it", __FUNCTION__);
+    LOG_INFO("{}:Base class, overwrite it.", __FUNCTION__);
     sleep(1000);
   }
   return err;
@@ -121,8 +137,7 @@ std::string Element::GetStatus() {
   std::string ss;
   double *fps = new double[_src_pads.size()];
   bl::gettimeofday(&tv, NULL);
-  double dt = (tv.tv_sec * 1000 + tv.tv_usec / 1000) -
-              (tv0.tv_sec * 1000 + tv0.tv_usec / 1000);
+  double dt = (tv.tv_sec * 1000 + tv.tv_usec / 1000) - (tv0.tv_sec * 1000 + tv0.tv_usec / 1000);
   ss = ss + "fps: ";
   for (size_t i = 0; i < _src_pads.size(); i++) {
     fps[i] = _src_pads[i]->GetSrcFrameNum() / dt * 1000;
@@ -137,7 +152,6 @@ std::string Element::GetStatus() {
 bool Element::IsProcessRunning() {
   return _process_thread.GetThreadStatus();
 }
-
 
 int Element::SetPipeLine(PipeLine *p) {
   _pipeline = p;

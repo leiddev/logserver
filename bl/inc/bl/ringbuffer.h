@@ -12,21 +12,21 @@ class RingBuffer {
   ~RingBuffer();
 
  public:
-  size_t Put(const char *, size_t);
-  size_t Get(char *, size_t);
+  size_t Put(const void *, size_t);
+  size_t Get(void *, size_t);
   size_t Size() const;
   size_t RemainSize() const;
   size_t Capacity() const;
   void Dump() const;
   void Clear();
-  char &operator[](size_t) const;
-  RingBuffer& operator= (const RingBuffer& other); // assignment operator
+  unsigned char &operator[](size_t) const;
+  RingBuffer &operator=(const RingBuffer &other);  // assignment operator
 
  private:
   size_t _capacity;
-  char *_head;
-  char *_tail;
-  char *_data;
+  unsigned char *_head;
+  unsigned char *_tail;
+  unsigned char *_data;
   bool _is_empty;
 };
 void RingBufferTest();

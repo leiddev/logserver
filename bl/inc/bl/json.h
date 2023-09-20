@@ -23,7 +23,7 @@ class BL_API JSON {
   JSON(void *root);
   JSON(const JSON &parent,
        const std::string &pos = "/");  // copy constructor
-  JSON(JSON&& parent);                 // move constructor
+  JSON(JSON &&parent);                 // move constructor
   virtual ~JSON();
 
   int Load(const bl::File &file);
@@ -36,7 +36,7 @@ class BL_API JSON {
   int Save(const bl::File &file);
   void Print();
   void ToString(std::string &s) const;
-  std::string ToString() const;
+  std::string ToString(bool formatted = true) const;
   int CreateInt(const std::string &path, const std::string &name, int value);
   int SetInt(const std::string &pos, int value);
   int GetInt(const std::string &pos, int dft) const;

@@ -1,6 +1,6 @@
 /*
-* lujy 2021.6
-*/
+ * lujy 2021.6
+ */
 #include "bl/file.h"
 #include <fstream>
 //#include <io.h>
@@ -18,7 +18,7 @@ File::File(const string &name, const string &path, const string &suffix) {
   this->path = path;
   this->name = name;
   this->suffix = suffix;
-  this->full_name = this->path + "/" + this->name + this->suffix;
+  this->full_name = ((this->path == "") ? this->path : this->path + "/") + this->name + this->suffix;
 }
 
 File::~File() {
@@ -61,16 +61,14 @@ int File::Write(const void *buffer, long long len) const {
 }
 
 bool File::EndsWith(const string &name, const vector<string> &ends) {
-  for (vector<string>::const_iterator it = ends.begin(); it != ends.end();
-       it++) {
+  for (vector<string>::const_iterator it = ends.begin(); it != ends.end(); it++) {
     if (name.find(*it) != -1)
       return true;
   }
   return false;
 }
 
-void File::GetFiles(const string &src_path, const vector<string> &ends,
-                    vector<File> &files, bool is_recursive) {
+void File::GetFiles(const string &src_path, const vector<string> &ends, vector<File> &files, bool is_recursive) {
 #if 0
   //�ļ����
   long hFile = 0;
@@ -103,6 +101,6 @@ void File::GetFiles(const string &src_path, const vector<string> &ends,
     } while (_findnext(hFile, &fileinfo) == 0);
     _findclose(hFile);
   }
-  #endif
+#endif
 }
 }  // namespace bl

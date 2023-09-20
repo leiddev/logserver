@@ -1,6 +1,6 @@
 /*
-* lujy 2021.6
-*/
+ * lujy 2021.6
+ */
 #include "bl/time.h"
 #include <unistd.h>
 #include <stdio.h>
@@ -8,7 +8,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-namespace bl{
+namespace bl {
 int gettimeofday(struct timeval *tv, void *tz) {
 #ifdef WIN32
   time_t clock;
@@ -31,8 +31,8 @@ int gettimeofday(struct timeval *tv, void *tz) {
   return 0;
 }
 
-static const char *weekday_chn[] = { "日", "一", "二", "三", "四", "五", "六" };
-static const char *weekday_eng[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+static const char *weekday_chn[] = {"日", "一", "二", "三", "四", "五", "六"};
+static const char *weekday_eng[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 void timenow(char *t, TIME_FORMAT_T format) {
   struct timeval tv;
@@ -60,7 +60,7 @@ void timenow(char *t, TIME_FORMAT_T format) {
   p = localtime(&tv.tv_sec);
 #endif
   if (p) {
-    switch(format) {
+    switch (format) {
       case TIME_FORMAT_1:
         sprintf(t, "%04d年%02d月%02d日 星期%s %02d:%02d:%02d", 1900 + p->tm_year, 1 + p->tm_mon, p->tm_mday,
                 weekday_chn[p->tm_wday], p->tm_hour, p->tm_min, p->tm_sec);
@@ -77,24 +77,26 @@ void timenow(char *t, TIME_FORMAT_T format) {
 }
 
 int timestamp(void) {
-    struct timeval tv;
-    bl::gettimeofday(&tv, NULL);
+  struct timeval tv;
+  bl::gettimeofday(&tv, NULL);
 
-    return tv.tv_sec;
+  return tv.tv_sec;
 }
 
 double timestamp_ms(void) {
   struct timeval tv;
   bl::gettimeofday(&tv, NULL);
+
   return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
-unsigned long long system_tick_ms(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
-    unsigned long long ullTime = ts.tv_sec;
-    ullTime = ullTime * 1000 + ts.tv_nsec / 1000000;
-    return ullTime;
+unsigned long long system_tick_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+
+  unsigned long long ullTime = ts.tv_sec;
+  ullTime = ullTime * 1000 + ts.tv_nsec / 1000000;
+  return ullTime;
 }
 
 long long ts_to_ns(struct timespec ts) {

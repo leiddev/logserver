@@ -1,5 +1,5 @@
 cmake_minimum_required( VERSION 3.10 FATAL_ERROR)
-project(bl VERSION 1.0.0 LANGUAGES C)
+project(bl VERSION 1.0.0 LANGUAGES CXX)
  
 #set dirs
 message("project dir:${CMAKE_CURRENT_LIST_DIR}")
@@ -12,6 +12,7 @@ SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)   #导出clangd需要的文件，用于智
 #SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BIN_DESTINATION})
  
 #set compile flags
+add_definitions(-DSPDLOG_COMPILED_LIB)
 #add_definitions(-std=c++11 -g -rdynamic)
 set(CMAKE_CXX_FLAGS "-Wno-psabi")
 #set(CMAKE_CXX_FLAGS "-g3 -rdynamic -std=c++11")

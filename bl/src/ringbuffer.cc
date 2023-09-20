@@ -7,7 +7,7 @@ using std::memcpy;
 
 namespace bl {
 RingBuffer::RingBuffer(size_t capacity) {
-  _data = new char[capacity];  // head != tail
+  _data = new unsigned char[capacity];  // head != tail
   _capacity = capacity;
   _head = _data;
   _tail = _data;
@@ -17,7 +17,7 @@ RingBuffer::RingBuffer(size_t capacity) {
 // copy constructor
 RingBuffer::RingBuffer(const RingBuffer& other) {
   _capacity = other._capacity;
-  _data = new char[_capacity];
+  _data = new unsigned char[_capacity];
   memcpy(_data, other._data, _capacity);
   _head = _data + (other._head - other._data);
   _tail = _data + (other._tail - other._data);
@@ -45,12 +45,12 @@ RingBuffer::~RingBuffer() {
   _head = _tail = _data = 0;
 }
 
-size_t RingBuffer::Put(const char *ptr, size_t size) {
+size_t RingBuffer::Put(const void* ptr, size_t size) {
   if (!ptr || size == 0)
     return 0;
 
   if (_capacity <= size) {
-    memcpy(_data, ptr + (size - _capacity), _capacity);
+    memcpy(_data, (unsigned char*)ptr + (size - _capacity), _capacity);
     _head = _data;
     _tail = _head + _capacity;
     _is_empty = false;
@@ -71,7 +71,7 @@ size_t RingBuffer::Put(const char *ptr, size_t size) {
     _tail += size;
   } else {
     memcpy(_tail, ptr, tail2boundry);
-    memcpy(_data, ptr + tail2boundry, cut_size);
+    memcpy(_data, (unsigned char*)ptr + tail2boundry, cut_size);
     _tail = _data + cut_size;
   }
 
@@ -82,7 +82,7 @@ size_t RingBuffer::Put(const char *ptr, size_t size) {
   return size;
 }
 
-size_t RingBuffer::Get(char *ptr, size_t size) {
+size_t RingBuffer::Get(void* ptr, size_t size) {
   if (!ptr)
     return -1;
 
@@ -96,7 +96,7 @@ size_t RingBuffer::Get(char *ptr, size_t size) {
     _head += size;
   } else {
     memcpy(ptr, _head, head2boundry);
-    memcpy(ptr + head2boundry, _data, cut_size);
+    memcpy((unsigned char*)ptr + head2boundry, _data, cut_size);
     _head = _data + cut_size;
   }
 
@@ -106,7 +106,7 @@ size_t RingBuffer::Get(char *ptr, size_t size) {
   return size;
 }
 
-char &RingBuffer::operator[](const size_t index) const{
+unsigned char& RingBuffer::operator[](const size_t index) const {
   size_t i = index % _capacity;
   if (_head + i < _data + _capacity) {
     return _head[i];
@@ -115,10 +115,10 @@ char &RingBuffer::operator[](const size_t index) const{
 }
 
 // assignment operator
-RingBuffer& RingBuffer::operator= (const RingBuffer& other) {
+RingBuffer& RingBuffer::operator=(const RingBuffer& other) {
   if (this != &other) {
     _capacity = other._capacity;
-    _data = new char[_capacity];
+    _data = new unsigned char[_capacity];
     memcpy(_data, other._data, _capacity);
     _head = _data + (other._head - other._data);
     _tail = _data + (other._tail - other._data);
@@ -138,7 +138,7 @@ size_t RingBuffer::RemainSize() const {
   return _capacity - Size();
 }
 
-size_t RingBuffer::Capacity() const{
+size_t RingBuffer::Capacity() const {
   return _capacity;
 }
 
@@ -154,7 +154,7 @@ void RingBuffer::Dump() const {
   printf("\n");
 }
 
-static void _printf_buffer(const RingBuffer &buffer) {
+static void _printf_buffer(const RingBuffer& buffer) {
   for (size_t i = 0; i < buffer.Size(); i++) {
     printf("%d, ", buffer[i]);
   }
@@ -187,7 +187,6 @@ void RingBufferTest() {
   buffer.Get(output, 3);
   buffer[0] = 123;
   _printf_buffer(buffer);
-
 }
 
 }  // namespace bl

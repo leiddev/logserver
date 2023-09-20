@@ -145,10 +145,10 @@ void PipeLine::ShowStatus(const string *log_file) {
   for (; it != _element_map.end(); it++) {
     ss << it->first << ": " << it->second->GetStatus() << "\n";
   }
-  ss << "------------------------------------------------" << std::endl;
+  ss << "------------------------------------------------";
   LOG_INFO("{}", ss.str().c_str());
 
-  if(log_file!= nullptr) {
+  if (log_file != nullptr) {
     std::fstream fs;
     fs.open(*log_file, std::ios::out | std::ios::app);
     if (fs.is_open()) {

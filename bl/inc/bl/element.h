@@ -35,6 +35,8 @@ class BL_API Element : public bl::Object {
   virtual int SetSinkPad(unsigned int index, Pad *pad);
   virtual Pad *GetSinkPad(unsigned int index);
   virtual int SetPipeLine(PipeLine *);
+  virtual void PushSrcPad(unsigned int index, sptrPackage);
+  virtual sptrPackage PopSinkPad(unsigned int index, int to = -1);
 
  protected:
   class ProcessThread : public Thread {
