@@ -3,7 +3,7 @@
 
 #include "bl/log.h"
 
-#define APP_VERSION_STR      "V0.1"
+#define APP_VERSION_STR      "V0.2"
 
 #define LOG_TRACE(...) spdlog::trace("[APP] " __VA_ARGS__)
 #define LOG_DEBUG(...) spdlog::debug("[APP] " __VA_ARGS__)

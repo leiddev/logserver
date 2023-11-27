@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "../include/tcp_server.h"
 #include "../include/common.h"
+#include <chrono>
 
 
 TcpServer::TcpServer() {
@@ -44,6 +45,7 @@ void TcpServer::removeDeadClients() {
                                               [](Client *client) { return !client->isConnected(); });
 
                 if (clientToRemove != _clients.end()) {
+                    std::cout << "removeDeadClients: " << (*clientToRemove)->getIp() << std::endl;;
                     (*clientToRemove)->close();
                     delete *clientToRemove;
                     _clients.erase(clientToRemove);
@@ -191,6 +193,12 @@ std::string TcpServer::acceptClient(uint timeout) {
         throw std::runtime_error(strerror(errno));
     }
 
+    struct timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &tv,sizeof(struct timeval));
+    setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval));
+
     auto newClient = new Client(fileDescriptor);
     newClient->setIp(inet_ntoa(_clientAddress.sin_addr));
     using namespace std::placeholders;
@@ -231,10 +239,19 @@ pipe_ret_t TcpServer::sendToAllClients(const char * msg, size_t size) {
 
     std::lock_guard<std::mutex> lock(_clientsMtx);
 
-    for (const Client *client : _clients) {
+    for (Client *client : _clients) {
+        auto beforeTime = std::chrono::steady_clock::now();
         pipe_ret_t sendingResult = sendToClient(*client, msg, size);
+        auto afterTime = std::chrono::steady_clock::now();
+        double duration_millsecond = std::chrono::duration<double, std::milli>(afterTime - beforeTime).count();
+        if (duration_millsecond > 3000) {
+            std::cout << "sendToClient failed: Timeout!" << " IP=" << client->getIp() << std::endl;
+            client->setConnected(false);
+        }
         if (!sendingResult.isSuccessful()) {
-            return sendingResult;
+            std::cout << "sendToClient failed: " << sendingResult.message() << " IP=" << client->getIp() << std::endl;
+            client->setConnected(false);
+            //return sendingResult;
         }
     }
 

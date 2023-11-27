@@ -22,7 +22,7 @@ private:
     std::thread * _receiveThread = nullptr;
     client_event_handler_t _eventHandlerCallback;
 
-    void setConnected(bool flag) { _isConnected = flag; }
+    //void setConnected(bool flag) { _isConnected = flag; }
 
     void receiveTask();
 
@@ -41,6 +41,7 @@ public:
 
 
     bool isConnected() const { return _isConnected; }
+    void setConnected(bool flag) { _isConnected = flag; }
 
     void startListen();
 
