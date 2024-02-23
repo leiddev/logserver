@@ -34,6 +34,8 @@ class Log {
     else
       return spdlog::default_logger();
   }
+
+  void setPattern(std::string pattern);
 };  // LOG class
 
 }  // namespace bl

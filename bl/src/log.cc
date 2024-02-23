@@ -82,4 +82,9 @@ void Log::setLogLevel(const std::string &level) {
     std::cout << "Log level set error " + level << std::endl;
   }
 }
+
+void Log::setPattern(std::string pattern) {
+  spdlog::set_pattern(pattern);
+}
+
 }  // namespace bl
