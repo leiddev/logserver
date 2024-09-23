@@ -13,6 +13,8 @@ RestartSec=3
 ExecStart=/home/leid/bin/LogServer/LogServer
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID
+StandardOutput=null
+StandardError=null
 
 [Install]
 WantedBy=multi-user.target
