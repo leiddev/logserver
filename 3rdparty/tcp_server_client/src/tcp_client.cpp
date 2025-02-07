@@ -5,10 +5,17 @@
 TcpClient::TcpClient() {
     _isConnected = false;
     _isClosed = true;
+#ifdef _WIN32
+    WSADATA wsaData;
+    (void)WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 }
 
 TcpClient::~TcpClient() {
     close();
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 pipe_ret_t TcpClient::connectTo(const std::string & address, int port) {
@@ -42,12 +49,21 @@ void TcpClient::initializeSocket() {
     _sockfd.set(socket(AF_INET , SOCK_STREAM , 0));
     const bool socketFailed = (_sockfd.get() == -1);
     if (socketFailed) {
+#ifdef _WIN32
+        int last_error = WSAGetLastError();
+        throw std::runtime_error("Windows socket failed");
+#else
         throw std::runtime_error(strerror(errno));
+#endif
     }
 }
 
 void TcpClient::setAddress(const std::string& address, int port) {
+#ifdef _WIN32
+    const int inetSuccess = inet_pton(AF_INET, address.c_str(), &_server.sin_addr);
+#else
     const int inetSuccess = inet_aton(address.c_str(), &_server.sin_addr);
+#endif
 
     if(!inetSuccess) { // inet_addr failed to parse address
         // if hostname is not in IP strings and dots format, try resolve it
@@ -121,7 +137,12 @@ void TcpClient::receiveTask() {
         const fd_wait::Result waitResult = fd_wait::waitFor(_sockfd);
 
         if (waitResult == fd_wait::Result::FAILURE) {
+#ifdef _WIN32
+            int last_error = WSAGetLastError();
+            throw std::runtime_error("Windows select failed");
+#else
             throw std::runtime_error(strerror(errno));
+#endif
         } else if (waitResult == fd_wait::Result::TIMEOUT) {
             continue;
         }
@@ -161,7 +182,12 @@ pipe_ret_t TcpClient::close(){
     }
     terminateReceiveThread();
 
+#ifdef _WIN32
+    const bool closeFailed = (closesocket(_sockfd.get()) == SOCKET_ERROR);
+#else
     const bool closeFailed = (::close(_sockfd.get()) == -1);
+#endif
+
     if (closeFailed) {
         return pipe_ret_t::failure(strerror(errno));
     }

@@ -59,7 +59,7 @@ class BL_API Element : public bl::Object {
   std::vector<Pad *> _src_pads;
   std::vector<Pad *> _sink_pads;
   PipeLine *_pipeline;
-  timeval tv0 = {0};
+  struct timeval tv0 = {0};
 };
 }  // namespace bl
 #endif

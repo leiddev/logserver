@@ -2,7 +2,12 @@
 #include "../include/file_descriptor.h"
 #include "../include/common.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
 #include <sys/select.h>
+#endif
 
 #define SELECT_FAILED -1
 #define SELECT_TIMEOUT 0

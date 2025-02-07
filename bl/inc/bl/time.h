@@ -1,7 +1,8 @@
 #ifndef _BL_TIME_H_
 #define _BL_TIME_H_
 
-#ifdef _WINDOWS
+#ifdef _WIN32
+#define _WIN32_LEAN_AND_MEAN
 #include <time.h>
 #include <windows.h>
 #else
@@ -11,6 +12,13 @@
 #include "exp.h"
 
 namespace bl {
+
+#ifdef _WIN32
+struct timeval {
+  long tv_sec;   // second
+  long tv_usec;  // microsecond
+};
+#endif
 
 typedef enum  {
   TIME_FORMAT_DEFAULT   = 0,

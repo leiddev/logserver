@@ -3,14 +3,8 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netdb.h>
 #include <vector>
 #include <errno.h>
 #include <thread>
@@ -20,6 +14,16 @@
 #include "pipe_ret_t.h"
 #include "file_descriptor.h"
 
+#ifdef _WIN32
+#define _WIN32_LEAN_AND_MEAN
+#include <ws2tcpip.h>
+#else
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#endif
 
 class TcpClient
 {

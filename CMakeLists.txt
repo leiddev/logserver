@@ -4,11 +4,14 @@ project(LogServer)
 
 set(PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR})
 
-set(CMAKE_C_FLAGS "-g ${PLATFORM_FLAGS}")
-set(CMAKE_CXX_FLAGS "-g -std=c++11 ${PLATFORM_FLAGS}")
-
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=/mnt/app/lib:/home/root/lib -no-pie")
-
+if(MSVC)
+	set(CMAKE_C_FLAGS "${PLATFORM_FLAGS} /execution-charset:gbk")
+	set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS} /EHsc /execution-charset:gbk")
+else()
+	set(CMAKE_C_FLAGS "-g ${PLATFORM_FLAGS}")
+	set(CMAKE_CXX_FLAGS "-g -std=c++11 ${PLATFORM_FLAGS}")
+	set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=/mnt/app/lib:/home/root/lib -no-pie")
+endif()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -49,39 +52,68 @@ message(STATUS "CMAKE_SHARED_LINKER_FLAGS_MINSIZEREL = " ${CMAKE_SHARED_LINKER_F
 message(STATUS "CMAKE_SHARED_LINKER_FLAGS_RELEASE = " ${CMAKE_SHARED_LINKER_FLAGS_RELEASE})
 message(STATUS "CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO = " ${CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO})
 
+message(STATUS "CMAKE_VERSION = ${CMAKE_VERSION}")
 
+# ---------------------------------------------------------------------------------------
+# Check operation system
+# ---------------------------------------------------------------------------------------
 if(CMAKE_HOST_SYSTEM_NAME MATCHES "Linux")
-	message("Current OS is Linux.")
+	message(STATUS "Current OS is Linux.")
 elseif(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-	message("Current OS is Windows.")
+	message(STATUS "Current OS is Windows.")
 else()
-	message("Current OS is ${CMAKE_HOST_SYSTEM_NAME}.")
+	message(STATUS "Current OS is ${CMAKE_HOST_SYSTEM_NAME}.")
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-	message("Target OS is Linux.")
+	message(STATUS "Target OS is Linux.")
 elseif(CMAKE_SYSTEM_NAME MATCHES "Windows")
-	message("Target OS is Windows.")
+	message(STATUS "Target OS is Windows.")
 else()
-	message("Target OS is ${CMAKE_SYSTEM_NAME}.")
+	message(STATUS "Target OS is ${CMAKE_SYSTEM_NAME}.")
 endif()
 
+# ---------------------------------------------------------------------------------------
+# Check CPU architecture
+# ---------------------------------------------------------------------------------------
 if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
-	message("Current CPU is x86_64 CPU.")
+	message(STATUS "Current CPU is x86_64 CPU.")
 elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-	message("Current CPU is aarch64 CPU.")
+	message(STATUS "Current CPU is aarch64 CPU.")
 elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "armv7l")
-	message("Current CPU is armv7l CPU.")
+	message(STATUS "Current CPU is armv7l CPU.")
 else()
-	message("Current CPU is ${CMAKE_HOST_SYSTEM_PROCESSOR}.")
+	message(STATUS "Current CPU is ${CMAKE_HOST_SYSTEM_PROCESSOR}.")
 endif()
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-	message("Target CPU is x86_64 CPU.")
+	message(STATUS "Target CPU is x86_64 CPU.")
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-	message("Target CPU is aarch64 CPU.")
+	message(STATUS "Target CPU is aarch64 CPU.")
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "armv7l")
-	message("Target CPU is armv7l CPU.")
+	message(STATUS "Target CPU is armv7l CPU.")
 else()
-	message("Target CPU is ${CMAKE_SYSTEM_PROCESSOR}.")
+	message(STATUS "Target CPU is ${CMAKE_SYSTEM_PROCESSOR}.")
+endif()
+
+# ---------------------------------------------------------------------------------------
+# Check GCC version
+# ---------------------------------------------------------------------------------------
+if (CMAKE_COMPILER_IS_GNUCC)
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpfullversion -dumpversion
+        OUTPUT_VARIABLE GCC_VERSION)
+    string(REGEX MATCHALL "[0-9]+" GCC_VERSION_COMPONENTS ${GCC_VERSION})
+    list(GET GCC_VERSION_COMPONENTS 0 GCC_MAJOR)
+    list(GET GCC_VERSION_COMPONENTS 1 GCC_MINOR)
+
+    set(GCC_VERSION "${GCC_MAJOR}.${GCC_MINOR}")
+    message(STATUS "gcc version: ${GCC_VERSION}")
+
+    if (GCC_VERSION GREATER "6.2")
+        message(STATUS "gcc version major: ${GCC_MAJOR}")
+        message(STATUS "gcc version minor: ${GCC_MINOR}")
+    endif()
+else()
+	message(STATUS "C compiler id: ${CMAKE_C_COMPILER_ID}")
+	message(STATUS "C compiler version is: ${CMAKE_C_COMPILER_VERSION}")
 endif()

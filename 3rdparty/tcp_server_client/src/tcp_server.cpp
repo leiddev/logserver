@@ -2,19 +2,26 @@
 #include <functional>
 #include <thread>
 #include <algorithm>
+#include <chrono>
 #include "../include/tcp_server.h"
 #include "../include/common.h"
-#include <chrono>
 
 
 TcpServer::TcpServer() {
     _subscribers.reserve(10);
     _clients.reserve(10);
     _stopRemoveClientsTask = false;
+#ifdef _WIN32
+    WSADATA wsaData;
+    (void)WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 }
 
 TcpServer::~TcpServer() {
     close();
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 void TcpServer::subscribe(const server_observer_t & observer) {
@@ -39,21 +46,24 @@ void TcpServer::removeDeadClients() {
     std::vector<Client*>::const_iterator clientToRemove;
     while (!_stopRemoveClientsTask) {
         {
-            std::lock_guard<std::mutex> lock(_clientsMtx);
+          std::unique_lock<std::mutex> lock(_clientsMtx);
             do {
                 clientToRemove = std::find_if(_clients.begin(), _clients.end(),
                                               [](Client *client) { return !client->isConnected(); });
 
                 if (clientToRemove != _clients.end()) {
-                    std::cout << "removeDeadClients: " << (*clientToRemove)->getIp() << std::endl;;
-                    (*clientToRemove)->close();
+                    try {
+                        (*clientToRemove)->close();
+                    } catch (const std::runtime_error &error) {
+                        std::cout << "removeDeadClients error: " << error.what() << "\n";
+                    }
                     delete *clientToRemove;
-                    _clients.erase(clientToRemove);
+                    clientToRemove = _clients.erase(clientToRemove); // point to next element
                 }
             } while (clientToRemove != _clients.end());
         }
 
-        sleep(2);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
 }
 
@@ -142,12 +152,17 @@ void TcpServer::initializeSocket() {
     _sockfd.set(socket(AF_INET, SOCK_STREAM, 0));
     const bool socketFailed = (_sockfd.get() == -1);
     if (socketFailed) {
+#ifdef _WIN32
+        int last_error = WSAGetLastError();
+        throw std::runtime_error("Windows socket failed");
+#else
         throw std::runtime_error(strerror(errno));
+#endif
     }
 
     // set socket for reuse (otherwise might have to wait 4 minutes every time socket is closed)
     const int option = 1;
-    setsockopt(_sockfd.get(), SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    setsockopt(_sockfd.get(), SOL_SOCKET, SO_REUSEADDR, (char *)&option, sizeof(option));
 }
 
 void TcpServer::bindAddress(int port) {
@@ -156,10 +171,15 @@ void TcpServer::bindAddress(int port) {
     _serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
     _serverAddress.sin_port = htons(port);
 
-    const int bindResult = bind(_sockfd.get(), (struct sockaddr *)&_serverAddress, sizeof(_serverAddress));
+    const int bindResult = ::bind(_sockfd.get(), (struct sockaddr *)&_serverAddress, sizeof(_serverAddress));
     const bool bindFailed = (bindResult == -1);
     if (bindFailed) {
+#ifdef _WIN32
+        int last_error = WSAGetLastError();
+        throw std::runtime_error("Windows bind failed");
+#else
         throw std::runtime_error(strerror(errno));
+#endif
     }
 }
 
@@ -167,7 +187,12 @@ void TcpServer::listenToClients(int maxNumOfClients) {
     const int clientsQueueSize = maxNumOfClients;
     const bool listenFailed = (listen(_sockfd.get(), clientsQueueSize) == -1);
     if (listenFailed) {
+#ifdef _WIN32
+        int last_error = WSAGetLastError();
+        throw std::runtime_error("Windows listen failed");
+#else
         throw std::runtime_error(strerror(errno));
+#endif
     }
 }
 
@@ -190,14 +215,19 @@ std::string TcpServer::acceptClient(uint timeout) {
 
     const bool acceptFailed = (fileDescriptor == -1);
     if (acceptFailed) {
+#ifdef _WIN32
+        int last_error = WSAGetLastError();
+        throw std::runtime_error("Windows accept failed");
+#else
         throw std::runtime_error(strerror(errno));
+#endif
     }
 
     struct timeval tv;
     tv.tv_sec = 5;
     tv.tv_usec = 0;
-    setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &tv,sizeof(struct timeval));
-    setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval));
+    setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(struct timeval));
+    setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
 
     auto newClient = new Client(fileDescriptor);
     newClient->setIp(inet_ntoa(_clientAddress.sin_addr));
@@ -245,13 +275,14 @@ pipe_ret_t TcpServer::sendToAllClients(const char * msg, size_t size) {
         auto afterTime = std::chrono::steady_clock::now();
         double duration_millsecond = std::chrono::duration<double, std::milli>(afterTime - beforeTime).count();
         if (duration_millsecond > 3000) {
-            std::cout << "sendToClient failed: Timeout!" << " IP=" << client->getIp() << std::endl;
+            std::cout << "sendToClient failed: Timeout!"
+                      << " IP=" << client->getIp() << std::endl;
             client->setConnected(false);
         }
         if (!sendingResult.isSuccessful()) {
             std::cout << "sendToClient failed: " << sendingResult.message() << " IP=" << client->getIp() << std::endl;
             client->setConnected(false);
-            //return sendingResult;
+            // return sendingResult;
         }
     }
 
@@ -298,23 +329,35 @@ pipe_ret_t TcpServer::close() {
     _enableSend = false;
     terminateDeadClientsRemover();
     { // close clients
-        std::lock_guard<std::mutex> lock(_clientsMtx);
+        std::unique_lock<std::mutex> lock(_clientsMtx);
 
         for (Client * client : _clients) {
             try {
                 client->close();
             } catch (const std::runtime_error& error) {
+                lock.unlock();
                 return pipe_ret_t::failure(error.what());
             }
         }
         _clients.clear();
     }
 
-    { // close server
+    if (_sockfd.get() != -1) {  // close server
+#ifdef _WIN32
+        const int closeServerResult = closesocket(_sockfd.get());
+#else
         const int closeServerResult = ::close(_sockfd.get());
+#endif
         const bool closeServerFailed = (closeServerResult == -1);
         if (closeServerFailed) {
+#ifdef _WIN32
+            int last_error = WSAGetLastError();
+            throw pipe_ret_t::failure("Windows closesocket failed");
+#else
             return pipe_ret_t::failure(strerror(errno));
+#endif
+        } else {
+            _sockfd.set(-1);
         }
     }
 

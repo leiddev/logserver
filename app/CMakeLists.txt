@@ -26,6 +26,15 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
 add_definitions(-DSPDLOG_COMPILED_LIB)
 
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+	add_definitions(-DWIN32_LEAN_AND_MEAN)
+	#set(PTHREAD_NAME "pthreadVC2")
+	#set(PTHREAD_INC "${PROJECT_ROOT}/3rdparty/pthreadVC2/include")
+	#set(PTHREAD_LIB "${PROJECT_ROOT}/3rdparty/pthreadVC2/lib/x86")
+else()
+	set(PTHREAD_NAME "pthread")
+endif()
+
 #include dirs
 include_directories(
 					./inc 
@@ -33,13 +42,14 @@ include_directories(
 					${PROJECT_ROOT}/3rdparty/spdlog/include
 					${PROJECT_ROOT}/3rdparty/tcp_server_client/include
 					${PROJECT_ROOT}/3rdparty/cmdline
+					${PTHREAD_INC}
 					)
 
 #link dirs
-#link_directories(
+link_directories(
 #					${PROJECT_ROOT}/3rdparty/xxx/lib
-#					)
-
+					${PTHREAD_LIB}
+					)
 #link dirs
 #link_directories(${BIN_DESTINATION})
  
@@ -58,13 +68,13 @@ aux_source_directory(src/ SRC_LIST)
 
 add_executable(LogServer ${SRC_LIST})
 
-
-target_link_libraries(LogServer
-					bl
-					spdlog
-					tcp_server_client
-					pthread
-					)
+target_link_libraries(
+	LogServer
+	bl
+	spdlog
+	tcp_server_client
+	${PTHREAD_NAME}
+)
 
 #execute 
 #SET(SRC_MAIN main.cpp calc_service.cpp)

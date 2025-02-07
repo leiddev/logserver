@@ -5,18 +5,21 @@
 #include "tcp_server.h"
 #include "bl/socket.h"
 #include "bl/msgq.h"
+#include "bl/time.h"
 #include "common.h"
-#include <signal.h>
 #include <memory>
 #include <thread>
 #include <string>
 #include <iostream>
 #include <cerrno>
-
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <linux/magic.h>
-
+#endif
 
 using sptrReceiveMsg = std::shared_ptr<std::string>;
 bl::MsgQ<sptrReceiveMsg> receiveMsgQ{128};
@@ -26,13 +29,26 @@ static bool disp_msg = true;
 bool log_msg = false;
 static TcpServer server;
 
+#ifdef _WIN32
+static BOOL WINAPI CtrlHandler(DWORD dwControlType) {
+  switch (dwControlType) {
+    case CTRL_C_EVENT:
+    case CTRL_CLOSE_EVENT:
+      is_running = false;
+      return TRUE;
+    default:
+      return FALSE;
+  }
+}
+#else
 static void sighandler(int sig_no) {
   is_running = false;
 }
 
 static void sigpipehandler(int sig_no) {
-  LOG_WARN("Caught signal SIGPIPE {}\n", sig_no);
+  LOG_WARN("Caught signal SIGPIPE {}", sig_no);
 }
+#endif
 
 static void onIncomingMsg(const std::string &ip, const char *msg, size_t size) {
   LOG_INFO("Receive client({}) msg({}):\n{}\n", ip, size, msg);
@@ -89,6 +105,11 @@ static void processReceiveMsg() {
   LOG_INFO("processReceiveMsg() exit!\n");
 }
 
+#ifdef _WIN32
+  static int mkpath(std::string s, mode_t mode) {
+  
+  }
+#else
 static long getFileSystemType(std::string mount_path) {
   struct statfs fs_info;
   memset(&fs_info, 0, sizeof(fs_info));
@@ -126,6 +147,7 @@ static int mkpath(std::string s, mode_t mode) {
   } else
     return 0;
 }
+#endif
 
 int main(int argc, char *argv[]) {
 
@@ -138,8 +160,15 @@ int main(int argc, char *argv[]) {
 
   LOG_CRITICAL("==========LogServer Start==========\n");
   LOG_CRITICAL("LogServer App Version: {}\n", APP_VERSION_STR);
+
+#ifdef _WIN32
+  if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+    LOG_ERR("error setting event handler.");
+  }
+#else
   signal(SIGINT, sighandler);
   signal(SIGPIPE, sigpipehandler);
+#endif
 
   std::string logger_name = "LogServer";
   std::string logger_level = "trace";
@@ -148,8 +177,17 @@ int main(int argc, char *argv[]) {
   size_t max_log_file_size = 1024 * 1024;
   size_t max_log_files = cmdl.get<int>("max files");
 
+#ifdef _WIN32
+
+#else
   mkpath(log_file_path, 0777);
-  if (getFileSystemType(log_file_path) == TMPFS_MAGIC) {  // 临时文件系统可用
+#endif
+
+#ifdef _WIN32
+  if (true) {
+#else
+  if (getFileSystemType(log_file_path) == TMPFS_MAGIC) {  // temp file system avaliable
+#endif
     LOG_INFO("Use tmpfs. Log file path: {}\n", log_file_path);
     std::string full_path = log_file_path + log_file_name;
     bl::Log::getInstance().init(full_path, logger_name, logger_level, max_log_file_size, max_log_files);

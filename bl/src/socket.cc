@@ -2,28 +2,45 @@
 #include "common.h"
 
 #include <cstring>
-#include <arpa/inet.h>
 #include <fcntl.h>
+#include <stdio.h>
+
+#ifdef _WIN32
+#define _WIN32_LEAN_AND_MEAN
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <netinet/in.h>
-#include <stdio.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif
+
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL (0)
+#endif
 
 namespace bl {
 
 Socket::Socket(int port) {
   _port = port;
   _socket_fd = -1;
+#ifdef _WIN32
+  WSADATA wsaData;
+  (void)WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 }
 
 Socket::~Socket() {
-  if (_socket_fd >= 0)
-    close(_socket_fd);
+  Close();
+#ifdef _WIN32
+  WSACleanup();
+#endif
 }
 
 int Socket::SetSocketPort(int port) {
@@ -93,7 +110,7 @@ int Socket::Listen(int backlog) {
 
 int Socket::Accept() {
   struct sockaddr_in client_addr;
-  unsigned int sin_size = sizeof(client_addr);
+  socklen_t sin_size = sizeof(client_addr);
   int client_fd;
 
   if((client_fd = accept(_socket_fd, (sockaddr*)(&client_addr), &sin_size)) == -1 ) {
@@ -173,7 +190,7 @@ int Socket::Send(const unsigned char *buffer, int size, int iTimeOut) {
       }
     }
 
-    nBytesThisTime = send(s, tmp, nBytesOneTime, MSG_NOSIGNAL);  // or 0
+    nBytesThisTime = send(s, (char *)tmp, nBytesOneTime, MSG_NOSIGNAL);  // or 0
     // LOG_INFO("nBytesThisTime {}.", nBytesThisTime);
     if (nBytesThisTime < 0) {  //
       iRetry++;
@@ -279,13 +296,13 @@ int Socket::Recv(unsigned char *buf, unsigned int len, int iTimeOut,
 
 int Socket::Connect(const char *szIp, int port, socket_type type) {
   int s_type;
-  struct hostent *he;
-  struct sockaddr_in server;
-
-  if ((he = gethostbyname(szIp)) == NULL) {
-    LOG_ERR("gethostbyname() error");
-    return -1;
-  }
+  struct addrinfo hints;
+  struct addrinfo *res;
+  struct addrinfo *p;
+  struct sockaddr addr;
+  socklen_t addr_len = 0;
+  int status;
+  char addrstr[INET6_ADDRSTRLEN];
 
   if (type == UDP)
     s_type = SOCK_DGRAM;
@@ -295,6 +312,32 @@ int Socket::Connect(const char *szIp, int port, socket_type type) {
     LOG_ERR("Socket type error.");
     return -1;
   }
+
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_INET;  // IPv4
+  hints.ai_socktype = s_type;
+  hints.ai_flags = AI_NUMERICSERV;  // port passed as as numeric value
+  hints.ai_protocol = 0;
+
+  auto port_str = std::to_string(port);
+  if ((status = getaddrinfo(szIp, port_str.c_str(), &hints, &res)) != 0) {
+    LOG_ERR("getaddrinfo error: %s\n", gai_strerror(status));
+    return -1;
+  }
+
+  for (p = res; p != NULL; p = p->ai_next) {
+    if (p->ai_family == AF_INET) {  // IPv4
+      if (p->ai_addr) {
+        addr = *p->ai_addr;
+        addr_len = p->ai_addrlen;
+        break;
+      }
+    }
+  }
+  freeaddrinfo(res);  // free the linked list
+
+  struct sockaddr_in *addr_in = (struct sockaddr_in *)&addr;
+  inet_ntop(AF_INET, &(addr_in->sin_addr), addrstr, sizeof(addrstr));
 
   if ((_socket_fd = socket(AF_INET, s_type, 0)) == -1) {
     LOG_ERR("socket() error: {}", strerror(errno));
@@ -302,24 +345,21 @@ int Socket::Connect(const char *szIp, int port, socket_type type) {
     return -1;
   }
 
+  #ifdef TCP_SYNCNT
   if (type == TCP) {
     int syncnt = 3;
     ::setsockopt(_socket_fd, IPPROTO_TCP, TCP_SYNCNT, &syncnt, sizeof(syncnt));
   }
+  #endif 
 
-  bzero(&server, sizeof(server));
-  server.sin_family = AF_INET;
-  server.sin_port = htons(port);
-  server.sin_addr = *((struct in_addr *)he->h_addr);
-
-  if (connect(_socket_fd, (struct sockaddr *)&server, sizeof(server)) ==
+  if (connect(_socket_fd, &addr, addr_len) ==
       -1) {
     LOG_ERR("connect() error: {}. ip:{}, port:{}", strerror(errno), szIp, port);
     //perror("connect");
     return -1;
   }
 
-  LOG_INFO("Connect to {}:{} succeed.", inet_ntoa(server.sin_addr), port);
+  LOG_INFO("Connect to {}:{} succeed.", addrstr, port);
 
   _port = port;
   return _socket_fd;
@@ -327,15 +367,14 @@ int Socket::Connect(const char *szIp, int port, socket_type type) {
 
 int Socket::Connect(const char* szIp, int port, int iTimeOut, socket_type type) {
   int s_type;
-  int flags;
   int n;
-  struct hostent *he;
-  struct sockaddr_in server;
-
-  if ((he = gethostbyname(szIp)) == NULL) {
-    LOG_ERR("gethostbyname() error");
-    return -1;
-  }
+  struct addrinfo hints;
+  struct addrinfo *res;
+  struct addrinfo *p;
+  struct sockaddr addr;
+  socklen_t addr_len = 0;
+  int status;
+  char addrstr[INET6_ADDRSTRLEN];
 
   if (type == UDP)
     s_type = SOCK_DGRAM;
@@ -346,52 +385,100 @@ int Socket::Connect(const char* szIp, int port, int iTimeOut, socket_type type) 
     return -1;
   }
 
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_INET;       // IPv4
+  hints.ai_socktype = s_type;
+  hints.ai_flags = AI_NUMERICSERV; // port passed as as numeric value
+  hints.ai_protocol = 0;
+
+  auto port_str = std::to_string(port);
+  if ((status = getaddrinfo(szIp, port_str.c_str(), &hints, &res)) != 0) {
+    LOG_ERR("getaddrinfo error: %s\n", gai_strerror(status));
+    return -1;
+  }
+
+  for(p = res; p != NULL; p = p->ai_next) {
+    if (p->ai_family == AF_INET) { // IPv4
+      if (p->ai_addr) {
+        addr = *p->ai_addr;
+        addr_len = p->ai_addrlen;
+        break;
+      }
+    }
+  }
+  freeaddrinfo(res); // free the linked list
+
+  struct sockaddr_in *addr_in = (struct sockaddr_in *)&addr;
+  inet_ntop(AF_INET, &(addr_in->sin_addr), addrstr, sizeof(addrstr));
+
   if ((_socket_fd = socket(AF_INET, s_type, 0)) == -1) {
     LOG_ERR("socket() error: {}", strerror(errno));
     return -1;
   }
 
-  bzero(&server, sizeof(server));
-  server.sin_family = AF_INET;
-  server.sin_port = htons(port);
-  server.sin_addr = *((struct in_addr *)he->h_addr);
-
+   // Change to Non-Blocking Mode
+#ifdef _WIN32
+  unsigned long on = 1;
+  unsigned long off = 0;
+  ioctlsocket(_socket_fd, FIONBIO, &on);
+#else
+  int flags;
   flags = fcntl(_socket_fd, F_GETFL, 0);
-  fcntl(_socket_fd, F_SETFL, flags | O_NONBLOCK); // 设置为非阻塞
+  fcntl(_socket_fd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
-  n = connect(_socket_fd, (struct sockaddr *)&server, sizeof(server));
+  n = connect(_socket_fd, &addr, addr_len);
   if (n < 0) {
     struct timeval tv;
     fd_set wset;
 
+#ifndef _WIN32
     if ((errno != EINPROGRESS) && (errno != EWOULDBLOCK)) {
-      LOG_ERR("Connect to {}:{} error: no EINPROGRESS or EWOULDBLOCK", inet_ntoa(server.sin_addr), port);
+      LOG_ERR("Connect to {}:{} error: no EINPROGRESS or EWOULDBLOCK", addrstr, port);
       return -1;
     }
+#endif
 
     tv.tv_sec = iTimeOut / 1000;
     tv.tv_usec = (iTimeOut - tv.tv_sec * 1000) * 1000;
 
     FD_ZERO(&wset);
-    FD_SET(_socket_fd, &wset); // 把socket添加到select中进行监听
+    FD_SET(_socket_fd, &wset); // add socket to select
 
     n = select(_socket_fd + 1, NULL, &wset, NULL, &tv);
-    if (n < 0) { // 出错
-      LOG_ERR("Connect to {}:{} error: select error", inet_ntoa(server.sin_addr), port);
-      fcntl(_socket_fd, F_SETFL, flags & ~O_NONBLOCK); // 恢复为阻塞模式
+    if (n < 0) { // error
+      LOG_ERR("Connect to {}:{} error: select error", addrstr, port);
+
+      // Change to Blocking Mode
+#ifdef _WIN32
+      ioctlsocket(_socket_fd, FIONBIO, &off);
+#else
+      fcntl(_socket_fd, F_SETFL, flags & ~O_NONBLOCK);
+#endif
       return -1;
-    } else if (0 == n) {  // 超时
-      LOG_ERR("Connect to {}:{} timeout!", inet_ntoa(server.sin_addr), port);
-      fcntl(_socket_fd, F_SETFL, flags & ~O_NONBLOCK); // 恢复为阻塞模式
+    } else if (0 == n) {  // error
+      LOG_ERR("Connect to {}:{} timeout!", addrstr, port);
+
+      // Change to Blocking Mode
+#ifdef _WIN32
+      ioctlsocket(_socket_fd, FIONBIO, &off);
+#else
+      fcntl(_socket_fd, F_SETFL, flags & ~O_NONBLOCK);
+#endif
       return 0;
     }
   }
 
-  fcntl(_socket_fd, F_SETFL, flags & ~O_NONBLOCK); // 恢复为阻塞模式
+  // Change to Blocking Mode
+#ifdef _WIN32
+  ioctlsocket(_socket_fd, FIONBIO, &off);
+#else
+  fcntl(_socket_fd, F_SETFL, flags & ~O_NONBLOCK);
+#endif
 
   int err = 0;
   socklen_t errlen = sizeof(err);
-  if (getsockopt(_socket_fd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
+  if (getsockopt(_socket_fd, SOL_SOCKET, SO_ERROR, (char *)&err, &errlen) == -1) {
     LOG_ERR("getsockopt() error: {}", strerror(errno));
     return -1;
   }
@@ -401,15 +488,35 @@ int Socket::Connect(const char* szIp, int port, int iTimeOut, socket_type type) 
     return -1;
   }
 
-  LOG_INFO("Connect to {}:{} succeed.", inet_ntoa(server.sin_addr), port);
+  LOG_INFO("Connect to {}:{} succeed.", addrstr, port);
 
   _port = port;
   return _socket_fd;
 }
 
 int Socket::Close() {
-  if (_socket_fd >= 0)
-    close(_socket_fd);
+#ifdef _WIN32
+  if (_socket_fd > 0) {
+    if (SOCKET_ERROR == closesocket(_socket_fd)) {
+      int last_error = WSAGetLastError();
+      LOG_ERR("Windows closesocket failed: {}", last_error);
+      return -1;
+    } else {
+      _socket_fd = -1;
+      return 0;
+    }
+  }
+#else
+  if (_socket_fd > 0) {
+    if (0 != ::close(_socket_fd)) {
+      LOG_ERR("Close socket failed: {}", strerror(errno));
+      return -1;
+    } else {
+      _socket_fd = -1;
+      return 0;
+    }
+  }
+#endif
   return 0;
 }
 
@@ -423,14 +530,14 @@ int Socket::Recvfrom(unsigned char *Buf, int BufSize, char *ServerIp, int *Port)
   }
 
   if (ServerIp && Port) {
-    bzero(&Addr, sizeof(Addr));
+    memset(&Addr, 0, sizeof(Addr));
     AddrLen = 20;
-    RecvLen = recvfrom(_socket_fd, Buf, BufSize, 0, (sockaddr *)&Addr, &AddrLen);
+    RecvLen = recvfrom(_socket_fd, (char *)Buf, BufSize, 0, (sockaddr *)&Addr, &AddrLen);
     memcpy(ServerIp, inet_ntoa(Addr.sin_addr), std::strlen(inet_ntoa(Addr.sin_addr)));
     *Port = ntohs(Addr.sin_port);
     // printf("srcip = %s, AddrLen = %d \n", inet_ntoa(Addr.sin_addr), AddrLen);
   } else {
-    RecvLen = recvfrom(_socket_fd, Buf, BufSize, 0, NULL, NULL);
+    RecvLen = recvfrom(_socket_fd, (char *)Buf, BufSize, 0, NULL, NULL);
   }
   return RecvLen;
 }

@@ -70,9 +70,7 @@ bool File::EndsWith(const string &name, const vector<string> &ends) {
 
 void File::GetFiles(const string &src_path, const vector<string> &ends, vector<File> &files, bool is_recursive) {
 #if 0
-  //�ļ����
   long hFile = 0;
-  //�ļ���Ϣ
   struct _finddata_t fileinfo;
   string p;
   string abs_path, rel_path, img_name, inf_name;

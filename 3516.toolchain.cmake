@@ -1,6 +1,7 @@
 # this is required
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR ARM)
+set(GNU_MACHINE arm-himix200-linux)
 
 # specify the cross compiler
 set(CMAKE_C_COMPILER   /opt/hisi-linux/x86-arm/arm-himix200-linux/bin/arm-himix200-linux-gcc)

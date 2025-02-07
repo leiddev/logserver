@@ -68,7 +68,7 @@ int getMenuSelection() {
     if (!std::cin) {
         throw std::runtime_error("invalid menu input. expected a number, but got something else");
     }
-    std::cin.ignore (std::numeric_limits<std::streamsize>::max(), '\n');
+    std::cin.ignore ((std::numeric_limits<std::streamsize>::max)(), '\n');
     return selection;
 }
 

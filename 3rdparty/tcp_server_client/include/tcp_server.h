@@ -3,11 +3,7 @@
 #include <vector>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <thread>
 #include <functional>
 #include <cstring>
@@ -18,6 +14,17 @@
 #include "server_observer.h"
 #include "pipe_ret_t.h"
 #include "file_descriptor.h"
+
+#ifdef _WIN32
+#define _WIN32_LEAN_AND_MEAN
+#include <ws2tcpip.h>
+#define uint UINT
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 class TcpServer {
 

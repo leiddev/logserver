@@ -1,16 +1,22 @@
-/*
- * lujy 2021.6
+﻿/*
+ * Leid 2024.3
  */
 #include "bl/time.h"
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
 #include <time.h>
+
+#ifdef _WIN32
+#define _WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/time.h>
+#endif
 
 namespace bl {
 int gettimeofday(struct timeval *tv, void *tz) {
-#ifdef WIN32
+#ifdef _WIN32
   time_t clock;
   struct tm tm;
   SYSTEMTIME wtm;
@@ -37,7 +43,7 @@ static const char *weekday_eng[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "S
 void timenow(char *t, TIME_FORMAT_T format) {
   struct timeval tv;
   struct tm *p = NULL;
-#ifdef WIN32
+#ifdef _WIN32
   struct tm tm;
   SYSTEMTIME wtm;
 #endif
@@ -46,7 +52,7 @@ void timenow(char *t, TIME_FORMAT_T format) {
     return;
   bl::gettimeofday(&tv, NULL);
 
-#ifdef WIN32
+#ifdef _WIN32
   GetLocalTime(&wtm);
   tm.tm_year = wtm.wYear - 1900;
   tm.tm_mon = wtm.wMonth - 1;
@@ -91,12 +97,31 @@ double timestamp_ms(void) {
 }
 
 unsigned long long system_tick_ms(void) {
+#ifdef _WIN32
+  LARGE_INTEGER freq;
+  LARGE_INTEGER count;
+  if (!QueryPerformanceFrequency(&freq)) {
+    return -1;
+  }
+  if (!QueryPerformanceCounter(&count)) {
+    return -1;
+  }
+  unsigned long long sec = count.QuadPart / freq.QuadPart;
+  unsigned long long nsec = 0;
+  if (freq.QuadPart < 1000000000) {
+    nsec = (count.QuadPart % freq.QuadPart) * 1000000000 / freq.QuadPart;
+  } else {
+    nsec = (long)((count.QuadPart % freq.QuadPart) * (1000000000.0 / freq.QuadPart));
+  }
+  return sec * 1000 + nsec / 1000000;
+#else
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
   unsigned long long ullTime = ts.tv_sec;
   ullTime = ullTime * 1000 + ts.tv_nsec / 1000000;
   return ullTime;
+#endif
 }
 
 long long ts_to_ns(struct timespec ts) {
@@ -111,7 +136,7 @@ struct timespec ns_to_ts(long long ns) {
 }
 
 void sleep(int ms) {
-#ifdef WIN32
+#ifdef _WIN32
   ::Sleep(ms);
 #else
   usleep(ms * 1000);
@@ -119,6 +144,30 @@ void sleep(int ms) {
 }
 
 int set_timestamp(long int sec, long int usec) {
+#ifdef _WIN32
+  SYSTEMTIME bigTime;
+  struct tm *myCUT;
+  time_t time = sec;
+
+  myCUT = gmtime(&time);
+  if (myCUT == NULL)
+    return -1;
+
+  bigTime.wYear = 1900 + myCUT->tm_year;
+  bigTime.wMonth = 1 + myCUT->tm_mon;
+  /* wDayOfWeek is supposedly ignored for SetSystemTime, but we have it.. */
+  bigTime.wDayOfWeek = myCUT->tm_wday;
+  bigTime.wDay = myCUT->tm_mday;
+  bigTime.wHour = myCUT->tm_hour;
+  bigTime.wMinute = myCUT->tm_min;
+  bigTime.wSecond = myCUT->tm_sec;
+  bigTime.wMilliseconds = usec * 1000;
+  BOOL success = SetSystemTime(&bigTime);
+  if (!success) {
+    return -1;
+  }
+  return 0;
+#else
     struct timeval tv;
 
     tv.tv_sec = sec;
@@ -131,6 +180,7 @@ int set_timestamp(long int sec, long int usec) {
     system("hwclock -w -u");
     
     return 0;
+#endif
 }
 
 }

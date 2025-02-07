@@ -254,6 +254,7 @@ void multi_sink_example()
     logger.info("this message should not appear in the console, only in the file");
 }
 
+#if (__GNUC__ > 6) || (_MSC_VER > 1920) // See https://github.com/gabime/spdlog/issues/2835
 // User defined types logging
 struct my_type
 {
@@ -271,6 +272,9 @@ struct fmt_lib::formatter<my_type> : fmt_lib::formatter<std::string>
         return fmt_lib::format_to(ctx.out(), "[my_type i={}]", my.i);
     }
 };
+#else
+#    define my_type(x) "NOT support user define type"
+#endif
 
 void user_defined_example()
 {

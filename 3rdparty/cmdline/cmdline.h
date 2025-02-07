@@ -36,7 +36,16 @@
 #include <typeinfo>
 #include <cstring>
 #include <algorithm>
+#if defined(_WIN32) || defined(_WIN64)
+#define _WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <DbgHelp.h>
+#undef max
+#undef min
+#pragma comment(lib, "dbghelp.lib")
+#else
 #include <cxxabi.h>
+#endif
 #include <cstdlib>
 
 namespace cmdline{
@@ -104,11 +113,21 @@ Target lexical_cast(const Source &arg)
 
 static inline std::string demangle(const std::string &name)
 {
-  int status=0;
-  char *p=abi::__cxa_demangle(name.c_str(), 0, 0, &status);
+#if defined(_WIN32) || defined(_WIN64)
+  const size_t bufSize = 256;
+  std::string ret;
+  char buf[bufSize];
+  memset(buf, 0, bufSize);
+  UnDecorateSymbolName(name.c_str(), buf, bufSize, UNDNAME_COMPLETE);
+  ret = std::string(buf);
+  return ret;
+#else
+  int status = 0;
+  char *p = abi::__cxa_demangle(name.c_str(), 0, 0, &status);
   std::string ret(p);
   free(p);
   return ret;
+#endif
 }
 
 template <class T>

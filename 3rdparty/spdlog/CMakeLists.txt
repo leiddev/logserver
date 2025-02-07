@@ -20,8 +20,13 @@ if(CMAKE_SYSTEM_NAME MATCHES "CYGWIN" OR CMAKE_SYSTEM_NAME MATCHES "MSYS")
     set(CMAKE_CXX_EXTENSIONS ON)
 endif()
 
-set(CMAKE_C_FLAGS "${PLATFORM_FLAGS}")
-set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS}")
+if(MSVC)
+    set(CMAKE_C_FLAGS "${PLATFORM_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS} /EHsc")
+else()
+    set(CMAKE_C_FLAGS "${PLATFORM_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS}")
+endif()
 
 # ---------------------------------------------------------------------------------------
 # Build library
@@ -36,10 +41,10 @@ add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
 # ---------------------------------------------------------------------------------------
 # Build example
 # --------------------------------------------------------------------------------------
-#option(EXAMPLE "Build SPDLOG_EXAMPLE" ON)
+option(EXAMPLE "Build SPDLOG_EXAMPLE" ON)
 
-#if(EXAMPLE)
-#   add_executable(spdlog_example example/example.cpp)
-#   target_link_libraries(spdlog_example ${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
-#endif()
+if(EXAMPLE)
+   add_executable(spdlog_example example/example.cpp)
+   target_link_libraries(spdlog_example ${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
+endif()
 

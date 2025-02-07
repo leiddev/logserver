@@ -46,7 +46,7 @@ int getMenuSelection() {
     if (!std::cin) {
         throw std::runtime_error("invalid menu input. expected a number, but got something else");
     }
-    std::cin.ignore (std::numeric_limits<std::streamsize>::max(), '\n');
+    std::cin.ignore ((std::numeric_limits<std::streamsize>::max)(), '\n');
     return selection;
 }
 
@@ -109,7 +109,7 @@ int main() {
         } else {
             std::cout << "Client failed to connect: " << connectRet.message() << "\n"
                       << "Make sure the server is open and listening\n\n";
-            sleep(2);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
             std::cout << "Retrying to connect...\n";
         }
 	};
