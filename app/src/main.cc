@@ -106,9 +106,39 @@ static void processReceiveMsg() {
 }
 
 #ifdef _WIN32
-  static int mkpath(std::string s, mode_t mode) {
-  
+static int mkpath(std::string &s) {
+  size_t pre = 0, pos;
+  std::string dir;
+  int mdret = 0;
+
+  if (s[s.size() - 1] != '\\') {
+    // force trailing \ so we can handle everything in loop
+    s += '\\';
   }
+
+  while ((pos = s.find_first_of('\\', pre)) != std::string::npos) {
+    dir = s.substr(0, pos++);
+    pre = pos;
+    if (dir.size() == 0)
+      continue;  // if leading \ first time is 0 length
+
+    int num = MultiByteToWideChar(CP_ACP, 0, dir.c_str(), -1, NULL, 0);
+    wchar_t *wide = new wchar_t[num];
+    MultiByteToWideChar(CP_ACP, 0, dir.c_str(), -1, wide, num);
+    std::wstring wcpath(wide);
+    delete[] wide;
+
+    mdret = CreateDirectoryW(wcpath.c_str(), NULL);
+    if ((mdret == 0) && (GetLastError() != ERROR_ALREADY_EXISTS))
+      break;
+  }
+
+  if ((mdret == 0) && (GetLastError() != ERROR_ALREADY_EXISTS)) {
+    ::perror("CreateDirectoryW");
+    return -1;
+  } else
+    return 0;
+}
 #else
 static long getFileSystemType(std::string mount_path) {
   struct statfs fs_info;
@@ -122,7 +152,7 @@ static long getFileSystemType(std::string mount_path) {
   return fs_info.f_type;
 }
 
-static int mkpath(std::string s, mode_t mode) {
+static int mkpath(std::string &s, mode_t mode) {
   size_t pre = 0, pos;
   std::string dir;
   int mdret;
@@ -150,6 +180,7 @@ static int mkpath(std::string s, mode_t mode) {
 #endif
 
 int main(int argc, char *argv[]) {
+  const std::string app_name{"LogServer"};
 
   cmdline::parser cmdl;
   cmdl.add<int>("udp port", 'u', "UDP port number", false, 11000, cmdline::range(1, 65535));
@@ -158,28 +189,40 @@ int main(int argc, char *argv[]) {
   cmdl.add("disp_msg", '\0', "display receive message");
   cmdl.parse_check(argc, argv);
 
-  LOG_CRITICAL("==========LogServer Start==========\n");
-  LOG_CRITICAL("LogServer App Version: {}\n", APP_VERSION_STR);
+  LOG_CRITICAL("=========={} Start==========\n", app_name);
+  LOG_CRITICAL("{} App Version: {}\n", app_name, APP_VERSION_STR);
 
 #ifdef _WIN32
   if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
     LOG_ERR("error setting event handler.");
   }
+
+#define CODE_PAGE_GBK (936)
+#define CODE_PAGE_UTF8 (65001)
+  if (IsValidCodePage(CODE_PAGE_UTF8)) {
+    SetConsoleCP(CODE_PAGE_UTF8);
+    SetConsoleOutputCP(CODE_PAGE_UTF8);
+    std::string console_title = app_name + " " + std::string(APP_VERSION_STR);
+    SetConsoleTitle(console_title.c_str());
+  }
+
 #else
   signal(SIGINT, sighandler);
   signal(SIGPIPE, sigpipehandler);
 #endif
 
-  std::string logger_name = "LogServer";
+  std::string logger_name = app_name;
   std::string logger_level = "trace";
   std::string log_file_name = "logserver.txt";
-  std::string log_file_path = "/tmp/log/";
+  std::string log_file_path;
   size_t max_log_file_size = 1024 * 1024;
   size_t max_log_files = cmdl.get<int>("max files");
 
 #ifdef _WIN32
-
+  log_file_path = ".\\log\\";
+  mkpath(log_file_path);
 #else
+  log_file_path = "/tmp/log/";
   mkpath(log_file_path, 0777);
 #endif
 
@@ -252,7 +295,7 @@ int main(int argc, char *argv[]) {
   } else {
     LOG_ERR("failed to close server: {}\n", sendingResult.message());
   }
-  LOG_CRITICAL("==========LogServer Stop==========\n");
+  LOG_CRITICAL("=========={} Stop==========\n", app_name);
 
   return 0;
 }
