@@ -42,6 +42,8 @@ include_directories(
 					${PROJECT_ROOT}/3rdparty/spdlog/include
 					${PROJECT_ROOT}/3rdparty/tcp_server_client/include
 					${PROJECT_ROOT}/3rdparty/cmdline
+					${PROJECT_ROOT}/3rdparty/asio/include
+					${PROJECT_ROOT}/3rdparty/websocketpp
 					${PTHREAD_INC}
 					)
 

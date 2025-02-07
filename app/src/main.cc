@@ -178,6 +178,7 @@ static int mkpath(std::string &s, mode_t mode) {
     return 0;
 }
 #endif
+extern void test_websocketserver();
 
 int main(int argc, char *argv[]) {
   const std::string app_name{"LogServer"};
@@ -297,5 +298,7 @@ int main(int argc, char *argv[]) {
   }
   LOG_CRITICAL("=========={} Stop==========\n", app_name);
 
+  test_websocketserver();
+  
   return 0;
 }
