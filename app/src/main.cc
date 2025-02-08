@@ -3,6 +3,7 @@
  */
 #include "cmdline.h"
 #include "tcp_server.h"
+#include "websocket_server.hh"
 #include "bl/socket.h"
 #include "bl/msgq.h"
 #include "bl/time.h"
@@ -27,7 +28,7 @@ bl::MsgQ<sptrReceiveMsg> receiveMsgQ{128};
 static volatile bool is_running = true;
 static bool disp_msg = true;
 bool log_msg = false;
-static TcpServer server;
+static TcpServer tcp_server;
 
 #ifdef _WIN32
 static BOOL WINAPI CtrlHandler(DWORD dwControlType) {
@@ -62,15 +63,15 @@ static void acceptConnection() {
   while(is_running) {
     try {
       LOG_INFO("Waiting for incoming client...\n");
-      std::string clientIP = server.acceptClient(0);
+      std::string clientIP = tcp_server.acceptClient(0);
       LOG_INFO("Accepted new client with IP: {}\n", clientIP);
       LOG_INFO("== Updated list of accepted clients ==\n");
-      server.printClients();
+      tcp_server.printClients();
 
       char time[128];
       bl::timenow(time);
       std::string welocmeInfo = std::string(time) + " Welcome to LogServer(" APP_VERSION_STR ")! Your IP is " + clientIP + "\n";
-      server.sendToClient(clientIP, welocmeInfo.c_str(), welocmeInfo.size());
+      tcp_server.sendToClient(clientIP, welocmeInfo.c_str(), welocmeInfo.size());
     } catch (const std::runtime_error &error) {
       if (is_running) {
         LOG_ERR("Accepting client failed: {}\n", error.what());
@@ -95,10 +96,11 @@ static void processReceiveMsg() {
         if (log_msg) {
           LOG_TRACE(msg);
         }
-        pipe_ret_t sendingResult = server.sendToAllClients(msg.data(), msg.size());
+        pipe_ret_t sendingResult = tcp_server.sendToAllClients(msg.data(), msg.size());
         if (!sendingResult.isSuccessful()) {
           LOG_ERR("failed to sent message: {}\n", sendingResult.message());
         }
+        websocket_send_message(msg);
       }
     }
   }
@@ -178,7 +180,6 @@ static int mkpath(std::string &s, mode_t mode) {
     return 0;
 }
 #endif
-extern void test_websocketserver();
 
 int main(int argc, char *argv[]) {
   const std::string app_name{"LogServer"};
@@ -232,7 +233,7 @@ int main(int argc, char *argv[]) {
 #else
   if (getFileSystemType(log_file_path) == TMPFS_MAGIC) {  // temp file system avaliable
 #endif
-    LOG_INFO("Use tmpfs. Log file path: {}\n", log_file_path);
+    LOG_INFO("Log file path: {}\n", log_file_path);
     std::string full_path = log_file_path + log_file_name;
     bl::Log::getInstance().init(full_path, logger_name, logger_level, max_log_file_size, max_log_files);
     bl::Log::getInstance().setPattern("%v");
@@ -259,7 +260,7 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  pipe_ret_t startRet = server.start(tcp_server_port);
+  pipe_ret_t startRet = tcp_server.start(tcp_server_port);
   if (startRet.isSuccessful()) {
     LOG_INFO("TCP Server setup succeeded.\n");
   } else {
@@ -271,13 +272,12 @@ int main(int argc, char *argv[]) {
   observer.incomingPacketHandler = onIncomingMsg;
   observer.disconnectionHandler = onClientDisconnected;
   observer.wantedIP = ""; // use empty string instead to receive messages from any IP address
-  server.subscribe(observer);
+  tcp_server.subscribe(observer);
 
   std::thread accept_thread(acceptConnection);
   std::thread process_thread(processReceiveMsg);
 
-  accept_thread.detach();
-  process_thread.detach();
+  websocket_server_start(9002);
 
   while (is_running) {
     len = udp_socket.Recv((uint8_t *)recv_buff, sizeof(recv_buff));
@@ -290,15 +290,17 @@ int main(int argc, char *argv[]) {
 
   udp_socket.Close();
   bl::sleep(100);
-  pipe_ret_t sendingResult = server.close();
+  pipe_ret_t sendingResult = tcp_server.close();
+  accept_thread.join();
+  process_thread.join();
+
   if (sendingResult.isSuccessful()) {
     LOG_INFO("closed server successfully\n");
   } else {
     LOG_ERR("failed to close server: {}\n", sendingResult.message());
   }
+  websocket_server_stop();
   LOG_CRITICAL("=========={} Stop==========\n", app_name);
-
-  test_websocketserver();
   
   return 0;
 }
