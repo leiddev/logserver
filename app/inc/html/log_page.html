@@ -1,0 +1,224 @@
+﻿u8R"xxx(
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>日志监控</title>
+  <style>
+    /* 使 html 和 body 占满整个浏览器窗口 */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    /* 使用 Flex 布局，让容器占满全屏 */
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    /* 标题样式（左对齐） */
+    #title {
+      text-align: left;
+      font-size: 24px;
+      background-color: #f0f0f0; /* 与控制区背景一致 */
+      padding: 10px 10px 0px 10px;
+    }
+    /* 控制区样式 */
+    #controls {
+      padding: 10px;
+      background-color: #f0f0f0; /* 控制区背景颜色 */
+      border-bottom: 1px solid #ccc;
+    }
+    /* 按钮基础样式 */
+    #controls button {
+      margin-right: 10px;
+      padding: 8px 15px;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    /* 连接 WebSocket 按钮：绿色（已连接）/ 红色（未连接） */
+    .connect-btn {
+      background-color: #28a745; /* 绿色 */
+      color: white;
+    }
+    .disconnect-btn {
+      background-color: #dc3545; /* 红色 */
+      color: white;
+    }
+    /* 自动滚动按钮：蓝色（自动滚动开）/ 灰色（自动滚动关） */
+    .scroll-on {
+      background-color: #007bff; /* 蓝色 */
+      color: white;
+    }
+    .scroll-off {
+      background-color: #6c757d; /* 灰色 */
+      color: white;
+    }
+    /* 其他按钮样式 */
+    #clearLogBtn {
+      background-color: #ffc107; /* 黄色 */
+      color: black;
+    }
+    #saveLogBtn {
+      background-color: #17a2b8; /* 青色 */
+      color: white;
+    }
+    /* 日志框样式 */
+    #log-box {
+      flex: 1;
+      min-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background-color: #f9f9f9;
+      font-family: Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <!-- 页面标题（左对齐） -->
+    <div id="title">日志监控</div>
+    
+    <!-- 控制区 -->
+    <div id="controls">
+      <button id="toggleConnectBtn" class="connect-btn">启动</button>
+      <button id="toggleScrollBtn" class="scroll-on">自动滚动</button>
+      <button id="clearLogBtn">清空</button>
+      <button id="saveLogBtn">保存</button>
+    </div>
+
+    <!-- 日志显示框 -->
+    <div id="log-box"></div>
+  </div>
+
+  <script>
+    let ws = null;
+    let autoScroll = true;
+    //最大保留日志行数
+    const maxLogLines = 10000;
+    //自动重连时间间隔
+    const reconnectDelay = 3000;
+    let manualClose = false;
+
+    // 动态生成WebSocket协议（wss或ws）
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    // 获取当前页面的主机（含端口，如 example.com:8080）
+    const wsHost = window.location.host;
+    // 生成WebSocket服务端URI
+    const wsUrl = `${wsProtocol}${wsHost}`;
+
+    function appendLog(message, type = "normal") {
+      const logBox = document.getElementById("log-box");
+      const line = document.createElement("div");
+      line.textContent = message;
+      if (type === "error") line.style.color = "red";
+      else if (type === "info") line.style.color = "blue";
+      logBox.appendChild(line);
+      if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
+      const logLines = logBox.querySelectorAll('div');
+      if (logLines.length > maxLogLines) logBox.removeChild(logLines[0]);
+    }
+
+    function connectWebSocket() {
+      manualClose = false;
+      appendLog("正在连接 " + wsUrl + " ...", "info");
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        appendLog("WebSocket 连接成功", "info");
+        updateConnectButton(true);
+      };
+
+      ws.onmessage = (event) => {
+        let logType = "normal";
+        if (event.data.toLowerCase().includes("critical") ||
+            event.data.toLowerCase().includes("warning") ||
+            event.data.toLowerCase().includes("error")) {
+          logType = "error";
+        }
+        appendLog(event.data, logType);
+      };
+
+      ws.onerror = () => appendLog("WebSocket 发生错误", "error");
+
+      ws.onclose = () => {
+        appendLog("WebSocket 已关闭", "info");
+        updateConnectButton(false);
+        if (!manualClose) {
+          appendLog("异常断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
+          setTimeout(connectWebSocket, reconnectDelay);
+        }
+      };
+    }
+
+    function disconnectWebSocket() {
+      if (ws) {
+        manualClose = true;
+        ws.close();
+        appendLog("已手动断开 WebSocket", "info");
+      }
+    }
+
+    function updateConnectButton(connected) {
+      const btn = document.getElementById("toggleConnectBtn");
+      if (connected) {
+        btn.textContent = "停止";
+        btn.classList.remove("connect-btn");
+        btn.classList.add("disconnect-btn");
+      } else {
+        btn.textContent = "启动";
+        btn.classList.remove("disconnect-btn");
+        btn.classList.add("connect-btn");
+      }
+    }
+
+    function toggleAutoScroll() {
+      autoScroll = !autoScroll;
+      const btn = document.getElementById("toggleScrollBtn");
+      if (autoScroll) {
+        btn.textContent = "自动滚动";
+        btn.classList.remove("scroll-off");
+        btn.classList.add("scroll-on");
+      } else {
+        btn.textContent = "自动滚动";
+        btn.classList.remove("scroll-on");
+        btn.classList.add("scroll-off");
+      }
+    }
+
+    function clearLogBox() {
+      document.getElementById("log-box").innerHTML = "";
+    }
+
+    function saveLog() {
+      const logBox = document.getElementById("log-box");
+      let logContent = logBox.innerText.replace(/\n\s*\n/g, '\n');
+      const now = new Date();
+      const filename = `log_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_`
+                    + `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}.txt`;
+      const blob = new Blob([logContent], { type: 'text/plain' });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    document.getElementById("toggleConnectBtn").addEventListener("click", () => {
+      ws && ws.readyState === WebSocket.OPEN ? disconnectWebSocket() : connectWebSocket();
+    });
+
+    document.getElementById("toggleScrollBtn").addEventListener("click", toggleAutoScroll);
+    document.getElementById("clearLogBtn").addEventListener("click", clearLogBox);
+    document.getElementById("saveLogBtn").addEventListener("click", saveLog);
+  </script>
+</body>
+</html>
+)xxx"

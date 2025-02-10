@@ -15,6 +15,7 @@
 #include <set>
 #include <functional>
 
+#include "html_page.hh"
 #include "common.h"
 
 typedef websocketpp::server<websocketpp::config::asio> server;
@@ -64,6 +65,8 @@ class broadcast_server {
     m_server.set_open_handler(bind(&broadcast_server::on_open, this, ::_1));
     m_server.set_close_handler(bind(&broadcast_server::on_close, this, ::_1));
     m_server.set_message_handler(bind(&broadcast_server::on_message, this, ::_1, ::_2));
+    m_server.set_fail_handler(bind(&broadcast_server::on_fail, this, ::_1));
+    m_server.set_http_handler(bind(&broadcast_server::on_http, this, ::_1));
   }
 
   void run(uint16_t port) {
@@ -126,6 +129,34 @@ class broadcast_server {
       }
     }
     m_action_cond.notify_one();
+  }
+
+  void on_fail(connection_hdl hdl) {
+    server::connection_ptr con = m_server.get_con_from_hdl(hdl);
+    LOG_ERR("Websocket server failed: {} {}\n", con->get_ec().value(), con->get_ec().message());
+  }
+
+  void on_http(connection_hdl hdl) {
+    auto con = m_server.get_con_from_hdl(hdl);
+    std::string resource = con->get_resource();
+
+    if (resource == "/") {
+      std::string body = get_log_page_html();
+      con->append_header("Content-Type", "text/html");
+      con->set_body(body);
+      con->set_status(websocketpp::http::status_code::ok);
+    } else {
+      con->set_status(websocketpp::http::status_code::not_found);
+      auto error_page = R"xxx(
+<!DOCTYPE html>
+<title>Error 404 (Resource not found)</title>
+<h1>Error 404</h1>
+<p>The requested file <code>
+)xxx" + resource + R"xxx(
+</code> was not found.</p>
+)xxx";
+      con->set_body(error_page);
+    }
   }
 
   // Broadcast text message to all clients
