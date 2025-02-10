@@ -22,6 +22,8 @@
 #include <linux/magic.h>
 #endif
 
+#define ENABLE_WEB_SERVER
+
 using sptrReceiveMsg = std::shared_ptr<std::string>;
 bl::MsgQ<sptrReceiveMsg> receiveMsgQ{128};
 
@@ -189,7 +191,9 @@ int main(int argc, char *argv[]) {
   cmdl.add<int>("tcp port", 't', "TCP port number", false, 11000, cmdline::range(1, 65535));
   cmdl.add<int>("max files", 's', "Maximum number of files", false, 100, cmdline::range(1, 1000));
   cmdl.add("disp_msg", '\0', "display receive message");
+#ifdef ENABLE_WEB_SERVER
   cmdl.add<int>("web port", 'w', "Web port number", false, 11001, cmdline::range(1, 65535));
+#endif
   cmdl.parse_check(argc, argv);
 
   LOG_CRITICAL("=========={} Start==========\n", app_name);
@@ -245,12 +249,16 @@ int main(int argc, char *argv[]) {
 
   uint16_t udp_port = cmdl.get<int>("udp port");
   uint16_t tcp_server_port = cmdl.get<int>("tcp port");
+#ifdef ENABLE_WEB_SERVER
   uint16_t web_server_port = cmdl.get<int>("web port");
+#endif
   disp_msg = cmdl.exist("disp_msg");
 
   LOG_INFO("UDP port: {}\n", udp_port);
   LOG_INFO("TCP Server port: {}\n", tcp_server_port);
+#ifdef ENABLE_WEB_SERVER
   LOG_INFO("Web Server port: {}\n", web_server_port);
+#endif
   LOG_INFO("Display message: {}\n", disp_msg);
 
   int err, len;
@@ -280,7 +288,9 @@ int main(int argc, char *argv[]) {
   std::thread accept_thread(acceptConnection);
   std::thread process_thread(processReceiveMsg);
 
+#ifdef ENABLE_WEB_SERVER
   websocket_server_start(web_server_port);
+#endif
 
   while (is_running) {
     len = udp_socket.Recv((uint8_t *)recv_buff, sizeof(recv_buff));
@@ -302,7 +312,11 @@ int main(int argc, char *argv[]) {
   } else {
     LOG_ERR("failed to close server: {}\n", sendingResult.message());
   }
+
+#ifdef ENABLE_WEB_SERVER
   websocket_server_stop();
+#endif
+
   LOG_CRITICAL("=========={} Stop==========\n", app_name);
   
   return 0;
