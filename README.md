@@ -1,6 +1,6 @@
 # 日志服务器程序
 
-日志服务器程序，用于接收各个应用程序通过UDP发送来的日志，将接收到的日志信息保存成文件，同时通过TCP对外提供日志服务。
+日志服务器程序，用于接收各个应用程序通过UDP发送来的日志，将接收到的日志信息保存成文件，同时通过TCP对外提供日志服务。日志服务器还具备Web前端界面，方面用户通过浏览器查看实时日志信息。
 
 ## 开发要求
 
@@ -15,6 +15,7 @@
 - 抓取到的日志信息会保持在`/tmp/log/`目录里面（如果该目录为临时文件系统`tmpfs`），自动按照1MB大小分割文件；
 - 可设置最大保存文件数量，超过数量则覆盖最旧的文件；
 - 可设置是否显示接收到的日志信息；
+- 具备Web前端界面，可配置Web服务器端口号；
 
 ## 命令行参数
 
@@ -25,6 +26,7 @@ options:
   -t, --tcp port     TCP port number (int [=11000])
   -s, --max files    Maximum number of files (int [=100])
       --disp_msg     display receive message
+  -w, --web port     Web port number (int [=11001])
   -?, --help         print this message
 ```
 
@@ -35,6 +37,8 @@ options:
 - cmdline：命令行参数解析库；
 - spdlog：日志处理库；
 - tcp_server_client：TCP服务端与客户端封装库；
+- asio：异步IO库；
+- WebSocket++：WebSocket协议库（依赖asio）；
 
 ## 配置文件说明
 
