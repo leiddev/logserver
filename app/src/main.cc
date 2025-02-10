@@ -189,6 +189,7 @@ int main(int argc, char *argv[]) {
   cmdl.add<int>("tcp port", 't', "TCP port number", false, 11000, cmdline::range(1, 65535));
   cmdl.add<int>("max files", 's', "Maximum number of files", false, 100, cmdline::range(1, 1000));
   cmdl.add("disp_msg", '\0', "display receive message");
+  cmdl.add<int>("web port", 'w', "Web port number", false, 11001, cmdline::range(1, 65535));
   cmdl.parse_check(argc, argv);
 
   LOG_CRITICAL("=========={} Start==========\n", app_name);
@@ -243,11 +244,13 @@ int main(int argc, char *argv[]) {
   }
 
   uint16_t udp_port = cmdl.get<int>("udp port");
-  uint16_t tcp_server_port = cmdl.get<int>("tcp port");;
+  uint16_t tcp_server_port = cmdl.get<int>("tcp port");
+  uint16_t web_server_port = cmdl.get<int>("web port");
   disp_msg = cmdl.exist("disp_msg");
 
   LOG_INFO("UDP port: {}\n", udp_port);
   LOG_INFO("TCP Server port: {}\n", tcp_server_port);
+  LOG_INFO("Web Server port: {}\n", web_server_port);
   LOG_INFO("Display message: {}\n", disp_msg);
 
   int err, len;
@@ -277,7 +280,7 @@ int main(int argc, char *argv[]) {
   std::thread accept_thread(acceptConnection);
   std::thread process_thread(processReceiveMsg);
 
-  websocket_server_start(9002);
+  websocket_server_start(web_server_port);
 
   while (is_running) {
     len = udp_socket.Recv((uint8_t *)recv_buff, sizeof(recv_buff));
