@@ -43,17 +43,20 @@ using websocketpp::lib::unique_lock;
  * on_close remove connection_hdl from channel
  * on_message queue send to all channels
  */
-enum action_type { SUBSCRIBE, UNSUBSCRIBE, MESSAGE, STOP };
+enum action_type { SUBSCRIBE, UNSUBSCRIBE, MESSAGE, STOP, BROADCAST };
 
 struct action {
   action(action_type t, connection_hdl h) : type(t), hdl(h) {
   }
   action(action_type t, connection_hdl h, websocketserver::message_ptr m) : type(t), hdl(h), msg(m) {
   }
+  action(action_type t, connection_hdl h, std::string m) : type(t), hdl(h), str(m) {
+  }
 
   action_type type;
   websocketpp::connection_hdl hdl;
   websocketserver::message_ptr msg;
+  const std::string str;
 };
 
 class Websocket_server {
@@ -101,7 +104,21 @@ class Websocket_server {
     {
       lock_guard<mutex> guard(m_action_lock);
       connection_hdl hdl;
+      std::queue<action>().swap(m_actions); // clean queue
       m_actions.push(action(STOP, hdl));
+    }
+    m_action_cond.notify_one();
+  }
+
+  void broadcast_message(const std::string& message) {
+    if (!m_server.is_listening() && (m_connections.size() == 0)) {
+      return;
+    }
+
+    {
+      lock_guard<mutex> guard(m_action_lock);
+      connection_hdl hdl;
+      m_actions.push(action(BROADCAST, hdl, message));
     }
     m_action_cond.notify_one();
   }
@@ -168,30 +185,6 @@ class Websocket_server {
     }
   }
 
-  // Broadcast text message to all clients
-  void broadcast_message(const std::string& message) {
-    lock_guard<mutex> guard(m_connection_lock);
-    for (auto& hdl : m_connections) {
-      try {
-        m_server.send(hdl, message, websocketpp::frame::opcode::text);
-      } catch (websocketpp::exception const& e) {
-        LOG_ERR("Websocket server exception: {}\n", e.what());
-      }
-    }
-  }
-
-  // Broadcast binary message to all clients
-  void broadcast_message(const char* message, size_t size) {
-    lock_guard<mutex> guard(m_connection_lock);
-    for (auto& hdl : m_connections) {
-      try {
-        m_server.send(hdl, message, size, websocketpp::frame::opcode::binary);
-      } catch (websocketpp::exception const& e) {
-        LOG_ERR("Websocket server exception: {}\n", e.what());
-      }
-    }
-  }
-
   void close_all_clients() {
     for (auto& hdl : m_connections) {
       try {
@@ -233,7 +226,6 @@ class Websocket_server {
         m_server.send(a.hdl, a.msg); // echo
       } else if (a.type == STOP) {
         lock_guard<mutex> guard(m_connection_lock);
-
         try {
           // initiate the closing of the server listening socket
           m_server.stop_listening();
@@ -242,6 +234,15 @@ class Websocket_server {
         } catch (websocketpp::exception const& e) {
           LOG_ERR("Websocket server exception: {}\n", e.what());
           m_connection_lock.unlock();
+        }
+      } else if (a.type == BROADCAST) {
+        lock_guard<mutex> guard(m_connection_lock);
+        for (auto& hdl : m_connections) {
+          try {
+            m_server.send(hdl, a.str, websocketpp::frame::opcode::text);
+          } catch (websocketpp::exception const& e) {
+            LOG_ERR("Websocket server exception: {}\n", e.what());
+          }
         }
       } else {
         // undefined.
