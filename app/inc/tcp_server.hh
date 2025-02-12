@@ -56,8 +56,9 @@ class Session : public std::enable_shared_from_this<Session> {
 
   // 向该会话发送一条消息（无论是echo或UDP广播）
   void deliver(const std::string& msg) {
+    auto self(shared_from_this());
     // post到IO上下文保证线程安全（如果有多线程时）
-    asio::post(socket_.get_executor(), [this, self = shared_from_this(), msg]() {
+    asio::post(socket_.get_executor(), [this, self, msg]() {
       bool write_in_progress = !write_msgs_.empty();
       write_msgs_.push_back(msg);
       if (!write_in_progress) {
