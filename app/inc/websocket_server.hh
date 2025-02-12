@@ -111,7 +111,7 @@ class Websocket_server {
   }
 
   void broadcast_message(const std::string& message) {
-    if (!m_server.is_listening() && (m_connections.size() == 0)) {
+    if (m_connections.size() == 0) {
       return;
     }
 
@@ -127,7 +127,7 @@ class Websocket_server {
     {
       lock_guard<mutex> guard(m_action_lock);
       m_actions.push(action(SUBSCRIBE, hdl));
-      LOG_INFO("Websocket server on_open\n");
+      LOG_INFO("Websocket client on_open\n");
     }
     m_action_cond.notify_one();
   }
@@ -136,7 +136,7 @@ class Websocket_server {
     {
       lock_guard<mutex> guard(m_action_lock);
       m_actions.push(action(UNSUBSCRIBE, hdl));
-      LOG_INFO("Websocket server on_close\n");
+      LOG_INFO("Websocket client on_close\n");
     }
     m_action_cond.notify_one();
   }
@@ -147,9 +147,9 @@ class Websocket_server {
       lock_guard<mutex> guard(m_action_lock);
       m_actions.push(action(MESSAGE, hdl, msg));
       if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-        LOG_INFO("Websocket server on_message: {}\n", msg->get_payload());
+        LOG_INFO("Websocket client on_message: {}\n", msg->get_payload());
       } else if (msg->get_opcode() == websocketpp::frame::opcode::binary) {
-        LOG_INFO("Websocket server on_message: hex({})\n", msg->get_payload().size());
+        LOG_INFO("Websocket client on_message: hex({})\n", msg->get_payload().size());
       }
     }
     m_action_cond.notify_one();
@@ -158,7 +158,7 @@ class Websocket_server {
   void on_fail(connection_hdl hdl) {
     websocketserver::connection_ptr con = m_server.get_con_from_hdl(hdl);
     if (con->get_ec() != asio::error::operation_aborted) {
-      LOG_ERR("Websocket server failed: {} {}\n", con->get_ec().value(), con->get_ec().message());
+      LOG_ERR("Websocket client failed: {} {}\n", con->get_ec().value(), con->get_ec().message());
     }
   }
 
@@ -191,9 +191,10 @@ class Websocket_server {
         // initiate the WebSocket closing handshake for these connections
         m_server.close(hdl, websocketpp::close::status::going_away, "Server shuting down");
       } catch (websocketpp::exception const& e) {
-        LOG_ERR("Websocket server exception: {}\n", e.what());
+        LOG_ERR("Websocket client exception: {}\n", e.what());
       }
     }
+    con_list().swap(m_connections);  // clean con_list
   }
 
   bool is_listening() {
@@ -241,7 +242,7 @@ class Websocket_server {
           try {
             m_server.send(hdl, a.str, websocketpp::frame::opcode::text);
           } catch (websocketpp::exception const& e) {
-            LOG_ERR("Websocket server exception: {}\n", e.what());
+            LOG_ERR("Websocket client exception: {}\n", e.what());
           }
         }
       } else {
