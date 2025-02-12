@@ -17,7 +17,6 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 add_subdirectory(bl ${CMAKE_BINARY_DIR}/out/bl)
 add_subdirectory(3rdparty/spdlog ${CMAKE_BINARY_DIR}/out/spdlog)
-add_subdirectory(3rdparty/tcp_server_client ${CMAKE_BINARY_DIR}/out/tcp_server_client)
 add_subdirectory(app ${CMAKE_BINARY_DIR}/out/app)
 
 message(STATUS "PLATFORM_FLAGS = " ${PLATFORM_FLAGS})

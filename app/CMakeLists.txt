@@ -40,7 +40,6 @@ include_directories(
 					./inc 
 					${PROJECT_ROOT}/bl/inc
 					${PROJECT_ROOT}/3rdparty/spdlog/include
-					${PROJECT_ROOT}/3rdparty/tcp_server_client/include
 					${PROJECT_ROOT}/3rdparty/cmdline
 					${PROJECT_ROOT}/3rdparty/asio/include
 					${PROJECT_ROOT}/3rdparty/websocketpp
@@ -74,7 +73,6 @@ target_link_libraries(
 	LogServer
 	bl
 	spdlog
-	tcp_server_client
 	${PTHREAD_NAME}
 )
 

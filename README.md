@@ -36,7 +36,6 @@ options:
 
 - cmdline：命令行参数解析库；
 - spdlog：日志处理库；
-- tcp_server_client：TCP服务端与客户端封装库；
 - asio：异步IO库；
 - WebSocket++：WebSocket协议库（依赖asio）；
 
