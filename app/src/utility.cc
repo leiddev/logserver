@@ -2,6 +2,7 @@
  * Leid 2025.2
  */
 #include <string>
+#include <cstring>
 
 #ifdef _WIN32
 #include <windows.h>
