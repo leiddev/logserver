@@ -1,113 +1,32 @@
 /*
  * Leid 2023.9
  */
+#define ENABLE_WEB_SERVER
+
 #include "cmdline.h"
-#include "tcp_server.h"
+#include "tcp_server.hh"
+#include "udp_server.hh"
+#ifdef ENABLE_WEB_SERVER
 #include "websocket_server.hh"
-#include "bl/socket.h"
-#include "bl/msgq.h"
-#include "bl/time.h"
+#endif
 #include "common.h"
+
 #include <memory>
 #include <thread>
 #include <string>
 #include <iostream>
 #include <cerrno>
+
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <signal.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <linux/magic.h>
 #endif
 
-#define ENABLE_WEB_SERVER
-
-using sptrReceiveMsg = std::shared_ptr<std::string>;
-bl::MsgQ<sptrReceiveMsg> receiveMsgQ{128};
-
-static volatile bool is_running = true;
 static bool disp_msg = true;
-bool log_msg = false;
-static TcpServer tcp_server;
-
-#ifdef _WIN32
-static BOOL WINAPI CtrlHandler(DWORD dwControlType) {
-  switch (dwControlType) {
-    case CTRL_C_EVENT:
-    case CTRL_CLOSE_EVENT:
-      is_running = false;
-      return TRUE;
-    default:
-      return FALSE;
-  }
-}
-#else
-static void sighandler(int sig_no) {
-  is_running = false;
-}
-
-static void sigpipehandler(int sig_no) {
-  LOG_WARN("Caught signal SIGPIPE {}", sig_no);
-}
-#endif
-
-static void onIncomingMsg(const std::string &ip, const char *msg, size_t size) {
-  LOG_INFO("Receive client({}) msg({}):\n{}\n", ip, size, msg);
-}
-
-static void onClientDisconnected(const std::string &ip, const std::string &msg) {
-  LOG_INFO("Client({}) disconnected: {}\n", ip, msg);
-}
-
-static void acceptConnection() {
-  while(is_running) {
-    try {
-      LOG_INFO("Waiting for incoming client...\n");
-      std::string clientIP = tcp_server.acceptClient(0);
-      LOG_INFO("Accepted new client with IP: {}\n", clientIP);
-      LOG_INFO("== Updated list of accepted clients ==\n");
-      tcp_server.printClients();
-
-      char time[128];
-      bl::timenow(time);
-      std::string welocmeInfo = std::string(time) + " Welcome to LogServer(" APP_VERSION_STR ")! Your IP is " + clientIP + "\n";
-      tcp_server.sendToClient(clientIP, welocmeInfo.c_str(), welocmeInfo.size());
-    } catch (const std::runtime_error &error) {
-      if (is_running) {
-        LOG_ERR("Accepting client failed: {}\n", error.what());
-      } else {
-        LOG_INFO("Accept connection thread exit: {}\n", error.what());
-        break;
-      }
-    }
-  }
-  LOG_INFO("acceptConnection() exit!\n");
-}
-
-static void processReceiveMsg() {
-  while(is_running) {
-    if (0 == receiveMsgQ.Wait(1000)) {
-      sptrReceiveMsg sptrRmsg = receiveMsgQ.Get();
-      if (sptrRmsg) {
-        std::string msg(sptrRmsg->data(), sptrRmsg->size());
-        if (disp_msg) {
-          std::cout << msg << std::flush;
-        }
-        if (log_msg) {
-          LOG_TRACE(msg);
-        }
-        pipe_ret_t sendingResult = tcp_server.sendToAllClients(msg.data(), msg.size());
-        if (!sendingResult.isSuccessful()) {
-          LOG_ERR("failed to sent message: {}\n", sendingResult.message());
-        }
-        websocket_send_message(msg);
-      }
-    }
-  }
-  LOG_INFO("processReceiveMsg() exit!\n");
-}
+static bool log_msg = false;
 
 #ifdef _WIN32
 static int mkpath(std::string &s) {
@@ -200,10 +119,6 @@ int main(int argc, char *argv[]) {
   LOG_CRITICAL("{} App Version: {}\n", app_name, APP_VERSION_STR);
 
 #ifdef _WIN32
-  if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
-    LOG_ERR("error setting event handler.");
-  }
-
 #define CODE_PAGE_GBK (936)
 #define CODE_PAGE_UTF8 (65001)
   if (IsValidCodePage(CODE_PAGE_UTF8)) {
@@ -212,10 +127,6 @@ int main(int argc, char *argv[]) {
     std::string console_title = app_name + " " + std::string(APP_VERSION_STR);
     SetConsoleTitle(console_title.c_str());
   }
-
-#else
-  signal(SIGINT, sighandler);
-  signal(SIGPIPE, sigpipehandler);
 #endif
 
   std::string logger_name = app_name;
@@ -247,76 +158,82 @@ int main(int argc, char *argv[]) {
     bl::Log::getInstance().init(logger_name, logger_level);
   }
 
-  uint16_t udp_port = cmdl.get<int>("udp port");
+  uint16_t udp_server_port = cmdl.get<int>("udp port");
   uint16_t tcp_server_port = cmdl.get<int>("tcp port");
 #ifdef ENABLE_WEB_SERVER
   uint16_t web_server_port = cmdl.get<int>("web port");
 #endif
   disp_msg = cmdl.exist("disp_msg");
-
-  LOG_INFO("UDP port: {}\n", udp_port);
-  LOG_INFO("TCP Server port: {}\n", tcp_server_port);
-#ifdef ENABLE_WEB_SERVER
-  LOG_INFO("Web Server port: {}\n", web_server_port);
-#endif
   LOG_INFO("Display message: {}\n", disp_msg);
 
-  int err, len;
-  char recv_buff[1024];
-
-  bl::Socket udp_socket(udp_port);
-  err = udp_socket.Bind(bl::Socket::UDP);
-  if (err < 0) {
-    LOG_ERR("UDP bind to port {} error!\n", udp_port);
-    return -1;
-  }
-
-  pipe_ret_t startRet = tcp_server.start(tcp_server_port);
-  if (startRet.isSuccessful()) {
-    LOG_INFO("TCP Server setup succeeded.\n");
-  } else {
-    LOG_ERR("TCP Server setup failed: {}\n", startRet.message());
-    return -1;
-  }
-
-  server_observer_t observer;
-  observer.incomingPacketHandler = onIncomingMsg;
-  observer.disconnectionHandler = onClientDisconnected;
-  observer.wantedIP = ""; // use empty string instead to receive messages from any IP address
-  tcp_server.subscribe(observer);
-
-  std::thread accept_thread(acceptConnection);
-  std::thread process_thread(processReceiveMsg);
+  try {
+    asio::io_context io_context;
 
 #ifdef ENABLE_WEB_SERVER
-  websocket_server_start(web_server_port);
+    Websocket_server websocket_server;
+#else
+    int websocket_server; //keep complier happy
 #endif
 
-  while (is_running) {
-    len = udp_socket.Recv((uint8_t *)recv_buff, sizeof(recv_buff));
-    if (len > 0) {
-      sptrReceiveMsg sptrRmsg = std::make_shared<std::string>(recv_buff, len);
-      receiveMsgQ.Add(sptrRmsg);
-    }
-    bl::sleep(1);
-  }
+    Tcp_server tcp_server(io_context, tcp_server_port);
 
-  udp_socket.Close();
-  bl::sleep(100);
-  pipe_ret_t sendingResult = tcp_server.close();
-  accept_thread.join();
-  process_thread.join();
-
-  if (sendingResult.isSuccessful()) {
-    LOG_INFO("closed server successfully\n");
-  } else {
-    LOG_ERR("failed to close server: {}\n", sendingResult.message());
-  }
+    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &websocket_server](const std::string &msg) {
+      if (disp_msg) {
+        std::cout << msg << std::flush;
+      }
+      if (log_msg) {
+        LOG_TRACE(msg);
+      }
+      tcp_server.broadcast_message(msg);
+#ifdef ENABLE_WEB_SERVER
+      if (websocket_server.is_listening()) {
+        websocket_server.broadcast_message(msg);
+      }
+#endif
+    });
 
 #ifdef ENABLE_WEB_SERVER
-  websocket_server_stop();
+    thread websocket_proc_thread([&] {
+      websocket_server.process_messages();
+      LOG_INFO("Websocket process thread exit.\n");
+    });
+
+    thread websocket_main_thread([&] {
+      try {
+        websocket_server.run(web_server_port);
+      } catch (websocketpp::exception const &e) {
+        LOG_ERR("Websocket server exception: {}\n", e.what());
+      }
+      LOG_INFO("Websocket main thread exit.\n");
+    });
 #endif
 
+    asio::signal_set signals(io_context, SIGINT);
+    signals.async_wait([&](std::error_code /*ec*/, int /*signo*/) {
+      LOG_CRITICAL("SIGINT received, stopping server...\n");
+      udp_server.stop();
+      tcp_server.stop();
+      io_context.stop();
+#ifdef ENABLE_WEB_SERVER
+      websocket_server.stop();
+#endif
+    });
+
+    LOG_INFO("TCP server is running on port {}\n", tcp_server_port);
+    LOG_INFO("UDP server is running on port {}\n", udp_server_port);
+    io_context.run();
+    LOG_INFO("TCP server stopped.\n");
+    LOG_INFO("UDP server stopped.\n");
+
+#ifdef ENABLE_WEB_SERVER
+    websocket_proc_thread.join();
+    websocket_main_thread.join();
+    LOG_INFO("Websocket server stopped.\n");
+#endif
+  } catch (std::exception &e) {
+    LOG_ERR("Log server exception: {}\n", e.what());
+  }
+  
   LOG_CRITICAL("=========={} Stop==========\n", app_name);
   
   return 0;
