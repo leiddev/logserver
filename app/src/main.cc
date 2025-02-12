@@ -60,11 +60,7 @@ int main(int argc, char *argv[]) {
   mkpath(log_file_path, 0777);
 #endif
 
-#ifdef _WIN32
-  if (true) {
-#else
-  if (getFileSystemType(log_file_path) == TMPFS_MAGIC) {  // temp file system avaliable
-#endif
+  if (isTempFS(log_file_path)) {
     LOG_INFO("Log file path: {}\n", log_file_path);
     std::string full_path = log_file_path + log_file_name;
     bl::Log::getInstance().init(full_path, logger_name, logger_level, max_log_file_size, max_log_files);

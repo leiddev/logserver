@@ -12,6 +12,11 @@
 #endif
 
 #ifdef _WIN32
+
+bool isTempFS(std::string mount_path) {
+  return true;
+}
+
 int mkpath(std::string &s) {
   size_t pre = 0, pos;
   std::string dir;
@@ -58,6 +63,10 @@ long getFileSystemType(std::string mount_path) {
   }
 
   return fs_info.f_type;
+}
+
+bool isTempFS(std::string mount_path) {
+  return (getFileSystemType(mount_path) == TMPFS_MAGIC);
 }
 
 int mkpath(std::string &s, mode_t mode) {
