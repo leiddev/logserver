@@ -233,7 +233,6 @@
     }
 
     document.getElementById("toggleConnectBtn").addEventListener("click", () => {
-      //ws && ws.readyState === WebSocket.OPEN ? disconnectWebSocket() : connectWebSocket();
       if (ws) {
         if (ws.readyState === WebSocket.OPEN) {
           disconnectWebSocket();
