@@ -36,6 +36,7 @@ options:
 
 - cmdline：命令行参数解析库；
 - spdlog：日志处理库；
+- unicode_utility：GB2812与UTF-8转换库；
 - asio：异步IO库；
 - WebSocket++：WebSocket协议库（依赖asio）；
 
