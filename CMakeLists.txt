@@ -24,9 +24,9 @@ message(STATUS "PLATFORM_FLAGS = " ${PLATFORM_FLAGS})
 
 # 编译器相关选项
 add_compile_options(${PLATFORM_FLAGS})
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     add_compile_options(-g)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     add_compile_options(/EHsc)
 endif()
 
@@ -108,6 +108,23 @@ endif()
 # ---------------------------------------------------------------------------------------
 # 显示编译器信息
 # ---------------------------------------------------------------------------------------
+message(STATUS "C++ compiler id: " ${CMAKE_CXX_COMPILER_ID})
+message(STATUS "C++ compiler version is: " ${CMAKE_CXX_COMPILER_VERSION})
+
+if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpfullversion -dumpversion
+        OUTPUT_VARIABLE GXX_VERSION)
+    string(REGEX MATCHALL "[0-9]+" GXX_VERSION_COMPONENTS ${GXX_VERSION})
+    list(GET GXX_VERSION_COMPONENTS 0 GXX_MAJOR)
+    list(GET GXX_VERSION_COMPONENTS 1 GXX_MINOR)
+
+    set(GXX_VERSION "${GXX_MAJOR}.${GXX_MINOR}")
+    message(STATUS "g++ version: ${GXX_VERSION}")
+endif()
+
+message(STATUS "C compiler id: ${CMAKE_C_COMPILER_ID}")
+message(STATUS "C compiler version is: ${CMAKE_C_COMPILER_VERSION}")
+
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpfullversion -dumpversion
         OUTPUT_VARIABLE GCC_VERSION)
@@ -117,12 +134,4 @@ if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
 
     set(GCC_VERSION "${GCC_MAJOR}.${GCC_MINOR}")
     message(STATUS "gcc version: ${GCC_VERSION}")
-
-    if (GCC_VERSION GREATER "6.2")
-        message(STATUS "gcc version major: ${GCC_MAJOR}")
-        message(STATUS "gcc version minor: ${GCC_MINOR}")
-    endif()
-else()
-	message(STATUS "C compiler id: ${CMAKE_C_COMPILER_ID}")
-	message(STATUS "C compiler version is: ${CMAKE_C_COMPILER_VERSION}")
 endif()

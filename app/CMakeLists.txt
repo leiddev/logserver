@@ -21,7 +21,7 @@ else()
 endif()
 
 # 设置编译器相关
-if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+if(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     add_compile_options(/source-charset:utf-8)
     add_compile_options(/execution-charset:utf-8)
 endif()
