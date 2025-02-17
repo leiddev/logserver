@@ -162,9 +162,9 @@ int JSON::GetArray(const string &pos, vector<JSON> &array) const {
   if (!item || item->type != cJSON_Array)
     return -1;
 
-  size_t array_size = cJSON_GetArraySize(item);
+  int array_size = cJSON_GetArraySize(item);
 
-  for (size_t i = 0; i < array_size; i++) {
+  for (int i = 0; i < array_size; i++) {
     element = cJSON_GetArrayItem(item, i);
     array.push_back(JSON(cJSON_Duplicate(element, 1)));
   }

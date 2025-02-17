@@ -1,7 +1,7 @@
 #ifndef _APP_COMMON_H_
 #define _APP_COMMON_H_
 
-#include "bl/log.h"
+#include <bl/log.h>
 
 #define APP_VERSION_STR      "V0.5"
 

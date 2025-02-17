@@ -1,26 +1,38 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(LogServer)
+# 显示CMake版本
+message(STATUS "CMAKE_VERSION = ${CMAKE_VERSION}")
 
-set(PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR})
+# 设置项目名称和版本
+project(LogServer VERSION 1.0.0)
 
-if(MSVC)
-	set(CMAKE_C_FLAGS "${PLATFORM_FLAGS} /execution-charset:gbk")
-	set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS} /EHsc /execution-charset:gbk")
-else()
-	set(CMAKE_C_FLAGS "-g ${PLATFORM_FLAGS}")
-	set(CMAKE_CXX_FLAGS "-g -std=c++11 ${PLATFORM_FLAGS}")
-	set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=/mnt/app/lib:/home/root/lib -no-pie")
-endif()
+# 设置C++标准
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# 启用详细输出
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-add_subdirectory(bl ${CMAKE_BINARY_DIR}/out/bl)
-add_subdirectory(3rdparty/spdlog ${CMAKE_BINARY_DIR}/out/spdlog)
+# 包含第三方库目录
+add_subdirectory(3rdparty ${CMAKE_BINARY_DIR}/out/3rdparty)
+
+# 添加 app 子目录
 add_subdirectory(app ${CMAKE_BINARY_DIR}/out/app)
 
+# 显示编译平台相关设置
 message(STATUS "PLATFORM_FLAGS = " ${PLATFORM_FLAGS})
 
+# 编译器相关选项
+add_compile_options(${PLATFORM_FLAGS})
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(-g)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    add_compile_options(/EHsc)
+endif()
+
+# ---------------------------------------------------------------------------------------
+# 显示编译器和链接器设置
+# ---------------------------------------------------------------------------------------
 message(STATUS "CMAKE_C_FLAGS = " ${CMAKE_C_FLAGS})
 message(STATUS "CMAKE_C_FLAGS_DEBUG = " ${CMAKE_C_FLAGS_DEBUG})
 message(STATUS "CMAKE_C_FLAGS_MINSIZEREL = " ${CMAKE_C_FLAGS_MINSIZEREL})
@@ -51,10 +63,8 @@ message(STATUS "CMAKE_SHARED_LINKER_FLAGS_MINSIZEREL = " ${CMAKE_SHARED_LINKER_F
 message(STATUS "CMAKE_SHARED_LINKER_FLAGS_RELEASE = " ${CMAKE_SHARED_LINKER_FLAGS_RELEASE})
 message(STATUS "CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO = " ${CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO})
 
-message(STATUS "CMAKE_VERSION = ${CMAKE_VERSION}")
-
 # ---------------------------------------------------------------------------------------
-# Check operation system
+# 显示操作系统信息
 # ---------------------------------------------------------------------------------------
 if(CMAKE_HOST_SYSTEM_NAME MATCHES "Linux")
 	message(STATUS "Current OS is Linux.")
@@ -73,7 +83,7 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------------------
-# Check CPU architecture
+# 显示CPU架构信息
 # ---------------------------------------------------------------------------------------
 if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
 	message(STATUS "Current CPU is x86_64 CPU.")
@@ -96,9 +106,9 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------------------
-# Check GCC version
+# 显示编译器信息
 # ---------------------------------------------------------------------------------------
-if (CMAKE_COMPILER_IS_GNUCC)
+if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpfullversion -dumpversion
         OUTPUT_VARIABLE GCC_VERSION)
     string(REGEX MATCHALL "[0-9]+" GCC_VERSION_COMPONENTS ${GCC_VERSION})

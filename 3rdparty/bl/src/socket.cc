@@ -329,7 +329,7 @@ int Socket::Connect(const char *szIp, int port, socket_type type) {
     if (p->ai_family == AF_INET) {  // IPv4
       if (p->ai_addr) {
         addr = *p->ai_addr;
-        addr_len = p->ai_addrlen;
+        addr_len = (socklen_t)p->ai_addrlen;
         break;
       }
     }
@@ -401,7 +401,7 @@ int Socket::Connect(const char* szIp, int port, int iTimeOut, socket_type type) 
     if (p->ai_family == AF_INET) { // IPv4
       if (p->ai_addr) {
         addr = *p->ai_addr;
-        addr_len = p->ai_addrlen;
+        addr_len = (socklen_t)p->ai_addrlen;
         break;
       }
     }

@@ -22,9 +22,9 @@ int Element::Init() {
 
   _parameter.GetArray("/src_pad_config", src_pads);
 
-  unsigned src_nums = src_pads.size();
+  size_t src_nums = src_pads.size();
 
-  for (unsigned i = 0; i < src_nums; i++) {
+  for (size_t i = 0; i < src_nums; i++) {
     size_t queue_size = src_pads[i].GetInt("/queue_size", 1);
     Pad *pad = new Pad(pad_type::PAD_TYPE_SRC, queue_size);
     _src_pads.push_back(pad);
@@ -32,9 +32,9 @@ int Element::Init() {
 
   _parameter.GetArray("/sink_pad_config", sink_pads);
 
-  unsigned sink_nums = sink_pads.size();
+  size_t sink_nums = sink_pads.size();
 
-  for (unsigned i = 0; i < sink_nums; i++) {
+  for (size_t i = 0; i < sink_nums; i++) {
     size_t queue_size = sink_pads[i].GetInt("/queue_size", 1);
     Pad *pad = new Pad(pad_type::PAD_TYPE_SINK, queue_size);
     _sink_pads.push_back(pad);
@@ -81,39 +81,39 @@ int Element::Stop() {
   return err;
 }
 
-int Element::SetSrcPad(unsigned int index, Pad *pad) {
+int Element::SetSrcPad(size_t index, Pad *pad) {
   if (index >= _src_pads.size())
     return -1;
   _src_pads[index] = pad;
   return 0;
 }
 
-Pad *Element::GetSrcPad(unsigned int index) {
+Pad *Element::GetSrcPad(size_t index) {
   if (index >= _src_pads.size())
     return nullptr;
   return _src_pads[index];
 }
 
-int Element::SetSinkPad(unsigned int index, Pad *pad) {
+int Element::SetSinkPad(size_t index, Pad *pad) {
   if (index >= _sink_pads.size())
     return -1;
   _sink_pads[index] = pad;
   return 0;
 }
 
-Pad *Element::GetSinkPad(unsigned int index) {
+Pad *Element::GetSinkPad(size_t index) {
   if (index >= _sink_pads.size())
     return nullptr;
   return _sink_pads[index];
 }
 
-void Element::PushSrcPad(unsigned int index, sptrPackage pack) {
+void Element::PushSrcPad(size_t index, sptrPackage pack) {
   if (index >= _src_pads.size())
     return;
   return _src_pads[index]->PushData(pack);
 }
 
-sptrPackage Element::PopSinkPad(unsigned int index, int to) {
+sptrPackage Element::PopSinkPad(size_t index, int to) {
   if (index >= _sink_pads.size())
     return nullptr;
   if (to < 0)

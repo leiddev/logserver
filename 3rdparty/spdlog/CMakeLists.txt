@@ -20,12 +20,8 @@ if(CMAKE_SYSTEM_NAME MATCHES "CYGWIN" OR CMAKE_SYSTEM_NAME MATCHES "MSYS")
     set(CMAKE_CXX_EXTENSIONS ON)
 endif()
 
-if(MSVC)
-    set(CMAKE_C_FLAGS "${PLATFORM_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS} /EHsc")
-else()
-    set(CMAKE_C_FLAGS "${PLATFORM_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${PLATFORM_FLAGS}")
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    add_compile_options(/EHsc)
 endif()
 
 # ---------------------------------------------------------------------------------------
@@ -35,8 +31,8 @@ find_package(Threads REQUIRED)
 
 add_definitions(-DSPDLOG_COMPILED_LIB)
 include_directories(include)
-aux_source_directory(src/ SRC_LIST)
-add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
+aux_source_directory(src SOURCES)
+add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 # ---------------------------------------------------------------------------------------
 # Build example

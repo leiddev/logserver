@@ -62,7 +62,7 @@ class Pad {
     DataQueue() { max_size = 1; }
     bl::Mutex _mutex;
     sptrPackageQueue _data;
-    unsigned max_size;
+    size_t max_size;
   };
 
  protected:

@@ -1,83 +1,54 @@
-cmake_minimum_required( VERSION 3.10 FATAL_ERROR)
-project(app VERSION 1.0.0 LANGUAGES CXX)
- 
-#set dirs
-message("project dir:${CMAKE_CURRENT_LIST_DIR}")
- 
-SET(CMAKE_EXPORT_COMPILE_COMMANDS OFF)   #导出clangd需要的文件，用于智能提示和基于语议的补全
- 
-#SET(BIN_DESTINATION ${PROJECT_SOURCE_DIR}/bin)
-#SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${BIN_DESTINATION})
-#SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${BIN_DESTINATION})
-#SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BIN_DESTINATION})
- 
-#set compile flags
-#add_definitions(-std=c++11 -g -rdynamic)
-#add_definitions(-std=c++1y)
+cmake_minimum_required(VERSION 3.10)
 
-#set(CMAKE_CXX_FLAGS "-g3 -rdynamic -std=c++11")
-#set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -fsanitize=address -fno-omit-frame-pointer -fsanitize=leak")
-#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+# 设置项目名称和版本
+project(${PROJECT_NAME} VERSION 1.0.0 LANGUAGES CXX)
+message(STATUS "PROJECT_NAME = " ${PROJECT_NAME})
 
-#Strip
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
-#set(CMAKE_BUILD_TYPE "RELEASE")
+# 导出Clang需要的文件，用于智能提示和基于语议的补全
+SET(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
+# spdlog库头文件优化
 add_definitions(-DSPDLOG_COMPILED_LIB)
 
+# 设置操作系统相关
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-	add_definitions(-DWIN32_LEAN_AND_MEAN)
-	#set(PTHREAD_NAME "pthreadVC2")
-	#set(PTHREAD_INC "${PROJECT_ROOT}/3rdparty/pthreadVC2/include")
-	#set(PTHREAD_LIB "${PROJECT_ROOT}/3rdparty/pthreadVC2/lib/x86")
+    add_definitions(-DWIN32_LEAN_AND_MEAN)
+    #set(PTHREAD_NAME "pthreadVC2")
+    #set(PTHREAD_INC "${CMAKE_SOURCE_DIR}/3rdparty/pthreadVC2/include")
+    #set(PTHREAD_LIB "${CMAKE_SOURCE_DIR}/3rdparty/pthreadVC2/lib/x86")
 else()
-	set(PTHREAD_NAME "pthread")
+    set(PTHREAD_NAME "pthread")
 endif()
 
-#include dirs
-include_directories(
-					./inc 
-					${PROJECT_ROOT}/bl/inc
-					${PROJECT_ROOT}/3rdparty/spdlog/include
-					${PROJECT_ROOT}/3rdparty/cmdline
-					${PROJECT_ROOT}/3rdparty/asio/include
-					${PROJECT_ROOT}/3rdparty/websocketpp
-					${PTHREAD_INC}
-					)
+# 设置编译器相关
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    add_compile_options(/source-charset:utf-8)
+    add_compile_options(/execution-charset:utf-8)
+endif()
 
-#link dirs
-link_directories(
-#					${PROJECT_ROOT}/3rdparty/xxx/lib
-					${PTHREAD_LIB}
-					)
-#link dirs
-#link_directories(${BIN_DESTINATION})
- 
-#libraries
-#SET(SRC_BASE_CALC base_calc.cpp)
-#add_library(base_calc SHARED ${SRC_BASE_CALC})
- 
-#SET(SRC_ADD add_calc.cpp)
-#add_library(add SHARED ${SRC_ADD})
-#target_link_libraries(add base_calc)
- 
-#SET(SRC_SUB sub_calc.cpp)
-#add_library(sub SHARED ${SRC_SUB})
-#arget_link_libraries(sub base_calc)
-aux_source_directory(src/ SRC_LIST)
+# 设置头文件目录
+include_directories(inc)
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/bl/inc)
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/spdlog/include)
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/cmdline)
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/asio/include)
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/websocketpp)
+include_directories(${PTHREAD_INC})
 
-add_executable(LogServer ${SRC_LIST})
+# 设置链接第三方库的路径
+#link_directories(${CMAKE_SOURCE_DIR}/3rdparty/xxx/lib
+link_directories(${PTHREAD_LIB})
 
+# 查找所有源文件
+aux_source_directory(src SOURCES)
+
+# 创建可执行文件
+add_executable(${PROJECT_NAME} ${SOURCES})
+
+# 链接库文件
 target_link_libraries(
-	LogServer
-	bl
-	spdlog
-	${PTHREAD_NAME}
+    ${PROJECT_NAME}
+    bl
+    spdlog
+    ${PTHREAD_NAME}
 )
-
-#execute 
-#SET(SRC_MAIN main.cpp calc_service.cpp)
-#set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
-#add_executable( ${PROJECT_NAME} ${SRC_MAIN})
-#target_link_libraries(${PROJECT_NAME} add sub multi div pthread)

@@ -131,7 +131,7 @@ long long ts_to_ns(struct timespec ts) {
 struct timespec ns_to_ts(long long ns) {
   struct timespec ts;
   ts.tv_sec = ns / 1000000000;
-  ts.tv_nsec = ns - ((long long)ts.tv_sec * 1000000000);
+  ts.tv_nsec = (long)(ns - ((long long)ts.tv_sec * 1000000000));
   return ts;
 }
 
@@ -161,7 +161,7 @@ int set_timestamp(long int sec, long int usec) {
   bigTime.wHour = myCUT->tm_hour;
   bigTime.wMinute = myCUT->tm_min;
   bigTime.wSecond = myCUT->tm_sec;
-  bigTime.wMilliseconds = usec * 1000;
+  bigTime.wMilliseconds = (WORD)(usec / 1000);
   BOOL success = SetSystemTime(&bigTime);
   if (!success) {
     return -1;

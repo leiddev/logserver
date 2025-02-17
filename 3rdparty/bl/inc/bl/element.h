@@ -30,13 +30,13 @@ class BL_API Element : public bl::Object {
   virtual int Process();
   virtual std::string GetStatus();
   virtual int LoadParameters(const JSON &param);
-  virtual int SetSrcPad(unsigned int index, Pad *pad);
-  virtual Pad *GetSrcPad(unsigned int index);
-  virtual int SetSinkPad(unsigned int index, Pad *pad);
-  virtual Pad *GetSinkPad(unsigned int index);
+  virtual int SetSrcPad(size_t index, Pad *pad);
+  virtual Pad *GetSrcPad(size_t index);
+  virtual int SetSinkPad(size_t index, Pad *pad);
+  virtual Pad *GetSinkPad(size_t index);
   virtual int SetPipeLine(PipeLine *);
-  virtual void PushSrcPad(unsigned int index, sptrPackage);
-  virtual sptrPackage PopSinkPad(unsigned int index, int to = -1);
+  virtual void PushSrcPad(size_t index, sptrPackage);
+  virtual sptrPackage PopSinkPad(size_t index, int to = -1);
 
  protected:
   class ProcessThread : public Thread {
