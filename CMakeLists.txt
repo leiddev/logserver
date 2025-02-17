@@ -13,22 +13,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # 启用详细输出
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+# 显示编译平台相关设置
+message(STATUS "PLATFORM_FLAGS = " ${PLATFORM_FLAGS})
+
+# 编译器相关选项
+if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g ${PLATFORM_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g ${PLATFORM_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PLATFORM_FLAGS} /EHsc")
+endif()
+
 # 包含第三方库目录
 add_subdirectory(3rdparty ${CMAKE_BINARY_DIR}/out/3rdparty)
 
 # 添加 app 子目录
 add_subdirectory(app ${CMAKE_BINARY_DIR}/out/app)
-
-# 显示编译平台相关设置
-message(STATUS "PLATFORM_FLAGS = " ${PLATFORM_FLAGS})
-
-# 编译器相关选项
-add_compile_options(${PLATFORM_FLAGS})
-if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
-    add_compile_options(-g)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
-    add_compile_options(/EHsc)
-endif()
 
 # ---------------------------------------------------------------------------------------
 # 显示编译器和链接器设置
