@@ -32,6 +32,7 @@ class BL_API Buffer {
   Buffer() {
     _addr = nullptr;
     _size = 0;
+    _valid_size = 0;
   }
   Buffer(size_t size) {
     _size = size;

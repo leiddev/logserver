@@ -172,6 +172,24 @@ int JSON::GetArray(const string &pos, vector<JSON> &array) const {
   return 0;
 }
 
+int JSON::GetArrayString(const string &pos, vector<string> &array) const {
+  cJSON *item = nullptr;
+  cJSON *element = nullptr;
+
+  item = (cJSON *)_Locate(pos);
+  if (!item || item->type != cJSON_Array)
+    return -1;
+
+  size_t array_size = cJSON_GetArraySize(item);
+
+  for (size_t i = 0; i < array_size; i++) {
+    element = cJSON_GetArrayItem(item, i);
+    array.push_back(element->valuestring);
+  }
+
+  return 0;
+}
+
 int JSON::CreateArray(const string &path, const string &name, vector<JSON> &array) {
   cJSON *item = (cJSON *)_Create(path);
   if (!item)

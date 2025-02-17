@@ -58,6 +58,7 @@ class BL_API JSON {
   JSON &operator=(const JSON &);
 
   int GetArray(const std::string &pos, std::vector<JSON> &array) const;
+  int GetArrayString(const std::string &pos, std::vector<std::string> &array) const;
   int CreateArray(const std::string &path, const std::string &name, std::vector<JSON> &array);
   int CreateArrayRoot(std::vector<JSON> &array);
   int CreateIntArray(const std::string &path, const std::string &name, const int *numbers, int count);
