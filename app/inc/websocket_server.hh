@@ -23,6 +23,7 @@
 #include <iostream>
 #include <set>
 
+#include <unicode_utility_cpp.h>
 #include "common.h"
 #include "html_page.hh"
 
@@ -242,7 +243,17 @@ class Websocket_server {
           try {
             m_server.send(hdl, a.str, websocketpp::frame::opcode::text);
           } catch (websocketpp::exception const& e) {
-            LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
+            if (e.code().value() == websocketpp::processor::error::invalid_payload) {
+              std::string no_utf8_str = a.str;
+              std::string utf8_str = UnicodeUtility::GB2312ToUTF8(no_utf8_str);
+              try {
+                m_server.send(hdl, utf8_str, websocketpp::frame::opcode::text);
+              } catch (websocketpp::exception const& e) {
+                LOG_ERR("Websocket client exception again: {} {}\n", e.code().value(), e.what());
+              }
+            } else {
+              LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
+            }
           }
         }
       } else {
