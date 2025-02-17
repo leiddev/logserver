@@ -30,6 +30,7 @@ endif()
 include_directories(inc)
 include_directories(${CMAKE_SOURCE_DIR}/3rdparty/bl/inc)
 include_directories(${CMAKE_SOURCE_DIR}/3rdparty/spdlog/include)
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/unicode_utility/inc)
 include_directories(${CMAKE_SOURCE_DIR}/3rdparty/cmdline)
 include_directories(${CMAKE_SOURCE_DIR}/3rdparty/asio/include)
 include_directories(${CMAKE_SOURCE_DIR}/3rdparty/websocketpp)
@@ -50,5 +51,6 @@ target_link_libraries(
     ${PROJECT_NAME}
     bl
     spdlog
+    unicode_utility
     ${PTHREAD_NAME}
 )
