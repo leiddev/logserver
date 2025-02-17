@@ -92,7 +92,7 @@ class Websocket_server {
       LOG_INFO("Websocket server running on port {}\n", port);
       m_server.run();
     } catch (websocketpp::exception const& e) {
-      LOG_ERR("Websocket server exception: {}\n", e.what());
+      LOG_ERR("Websocket server exception: {} {}\n", e.code().value(), e.what());
     } catch (const std::exception& e) {
       LOG_ERR("Websocket server exception: {}\n", e.what());
     } catch (...) {
@@ -191,7 +191,7 @@ class Websocket_server {
         // initiate the WebSocket closing handshake for these connections
         m_server.close(hdl, websocketpp::close::status::going_away, "Server shuting down");
       } catch (websocketpp::exception const& e) {
-        LOG_ERR("Websocket client exception: {}\n", e.what());
+        LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
       }
     }
     con_list().swap(m_connections);  // clean con_list
@@ -233,7 +233,7 @@ class Websocket_server {
           close_all_clients();
           is_running = false;
         } catch (websocketpp::exception const& e) {
-          LOG_ERR("Websocket server exception: {}\n", e.what());
+          LOG_ERR("Websocket server exception: {} {}\n", e.code().value(), e.what());
           m_connection_lock.unlock();
         }
       } else if (a.type == BROADCAST) {
@@ -242,7 +242,7 @@ class Websocket_server {
           try {
             m_server.send(hdl, a.str, websocketpp::frame::opcode::text);
           } catch (websocketpp::exception const& e) {
-            LOG_ERR("Websocket client exception: {}\n", e.what());
+            LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
           }
         }
       } else {
