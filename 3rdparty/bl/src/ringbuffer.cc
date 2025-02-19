@@ -63,8 +63,8 @@ size_t RingBuffer::Put(const void* ptr, size_t size) {
     is_overwrite = true;
   }
 
-  size_t tail2boundry = (_data + _capacity) - _tail;
-  size_t cut_size = size - tail2boundry;
+  int tail2boundry = (_data + _capacity) - _tail;
+  int cut_size = size - tail2boundry;
 
   if (cut_size < 0) {  // <=?
     memcpy(_tail, ptr, size);
@@ -88,8 +88,8 @@ size_t RingBuffer::Get(void* ptr, size_t size) {
 
   size = size <= Size() ? size : Size();
 
-  size_t head2boundry = (_data + _capacity) - _head;
-  size_t cut_size = size - head2boundry;
+  int head2boundry = (_data + _capacity) - _head;
+  int cut_size = size - head2boundry;
 
   if (cut_size < 0) {
     memcpy(ptr, _head, size);
