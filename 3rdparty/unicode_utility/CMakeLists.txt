@@ -11,9 +11,9 @@ project(unicode_utility)
 # Build library
 # --------------------------------------------------------------------------------------
 
-include_directories(inc)
 aux_source_directory(src/ SRC_LIST)
 add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
+target_include_directories(${PROJECT_NAME} PUBLIC inc)
 
 option(EXAMPLE "Build EXAMPLE" ON)
 

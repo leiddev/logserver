@@ -8,9 +8,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     add_definitions(-D_WINSOCK_DEPRECATED_NO_WARNINGS)
 endif()
 
-include_directories(inc)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/spdlog/include)
-
 aux_source_directory(src SOURCES)
 
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
+
+target_include_directories(${PROJECT_NAME} PUBLIC inc)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/3rdparty/spdlog/include)

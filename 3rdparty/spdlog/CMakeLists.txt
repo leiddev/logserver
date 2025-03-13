@@ -30,9 +30,10 @@ endif()
 find_package(Threads REQUIRED)
 
 add_definitions(-DSPDLOG_COMPILED_LIB)
-include_directories(include)
+
 aux_source_directory(src SOURCES)
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
+target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 # ---------------------------------------------------------------------------------------
 # Build example

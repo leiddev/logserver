@@ -14,8 +14,6 @@ add_definitions(-DSPDLOG_COMPILED_LIB)
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     add_definitions(-DWIN32_LEAN_AND_MEAN)
     #set(PTHREAD_NAME "pthreadVC2")
-    #set(PTHREAD_INC "${CMAKE_SOURCE_DIR}/3rdparty/pthreadVC2/include")
-    #set(PTHREAD_LIB "${CMAKE_SOURCE_DIR}/3rdparty/pthreadVC2/lib/x86")
 else()
     set(PTHREAD_NAME "pthread")
 endif()
@@ -28,17 +26,9 @@ endif()
 
 # 设置头文件目录
 include_directories(inc)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/bl/inc)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/spdlog/include)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/unicode_utility/inc)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/cmdline)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/asio/include)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/websocketpp)
-include_directories(${PTHREAD_INC})
 
 # 设置链接第三方库的路径
 #link_directories(${CMAKE_SOURCE_DIR}/3rdparty/xxx/lib
-link_directories(${PTHREAD_LIB})
 
 # 查找所有源文件
 aux_source_directory(src SOURCES)
@@ -52,5 +42,8 @@ target_link_libraries(
     bl
     spdlog
     unicode_utility
+    cmdline
+    websocketpp
+    asio
     ${PTHREAD_NAME}
 )
