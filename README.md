@@ -16,11 +16,13 @@
 - 可设置最大保存文件数量，超过数量则覆盖最旧的文件；
 - 可设置是否显示接收到的日志信息；
 - 具备Web前端界面，可配置Web服务器端口号；
+- **WebSocket服务器**：通过WebSocket协议向前端实时推送日志更新，支持多客户端并发连接；
+- **SSE服务器**：通过Server-Sent Events（SSE）协议向前端实时推送日志更新，支持多客户端并发连接；
 
 ## 命令行参数
 
 ```
-usage: ./LogServer [options] ... 
+usage: ./LogServer [options] ...
 options:
   -u, --udp port     UDP port number (int [=11000])
   -t, --tcp port     TCP port number (int [=11000])
@@ -29,6 +31,30 @@ options:
   -w, --web port     Web port number (int [=11001])
   -?, --help         print this message
 ```
+
+**Web服务器可选配置：**
+
+通过修改 `main.cc` 中的 `ENABLE_WEB_SERVER` 选项来选择 Web 服务器类型：
+
+| 值 | 类型 | 说明 |
+|---|------|------|
+| 0 | 无 | 禁用 Web 服务器 |
+| 1 | WebSocket | 使用 WebSocket 协议 |
+| 2 | SSE | 使用 Server-Sent Events 协议（**默认**） |
+
+**WebSocket 服务器使用说明：**
+
+- WebSocket 服务器与 Web 服务器共用相同的端口
+- 访问根路径 `/` 显示日志查看页面
+- WebSocket 连接端点为根路径 `/`，用于接收实时日志推送
+- 支持多客户端并发连接，断开连接后自动清理资源
+
+**SSE 服务器使用说明：**
+
+- SSE 服务器与 Web 服务器共用相同的端口
+- 访问根路径 `/` 显示日志查看页面
+- SSE 连接端点为 `/sse`，用于接收实时日志推送
+- 支持多客户端并发连接，断开连接后自动清理资源
 
 ## 使用的第三方库
 
