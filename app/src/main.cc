@@ -1,13 +1,20 @@
 /*
  * Leid 2023.9
  */
-#define ENABLE_WEB_SERVER
+
+// Web Server Configuration:
+//   0 - Disable Web Server
+//   1 - Use WebSocket Server
+//   2 - Use SSE Server
+#define ENABLE_WEB_SERVER 2
 
 #include <cmdline.h>
 #include "tcp_server.hh"
 #include "udp_server.hh"
-#ifdef ENABLE_WEB_SERVER
-#include "websocket_server.hh"
+#if ENABLE_WEB_SERVER == 1
+  #include "websocket_server.hh"
+#elif ENABLE_WEB_SERVER == 2
+  #include "sse_server.hh"
 #endif
 #include "utility.hh"
 #include "common.h"
@@ -26,7 +33,7 @@ int main(int argc, char *argv[]) {
   cmdl.add<int>("tcp port", 't', "TCP port number", false, 11000, cmdline::range(1, 65535));
   cmdl.add<int>("max files", 's', "Maximum number of files", false, 100, cmdline::range(1, 1000));
   cmdl.add("disp_msg", '\0', "display receive message");
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER != 0
   cmdl.add<int>("web port", 'w', "Web port number", false, 11001, cmdline::range(1, 65535));
 #endif
   cmdl.parse_check(argc, argv);
@@ -72,7 +79,7 @@ int main(int argc, char *argv[]) {
 
   uint16_t udp_server_port = cmdl.get<int>("udp port");
   uint16_t tcp_server_port = cmdl.get<int>("tcp port");
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER != 0
   uint16_t web_server_port = cmdl.get<int>("web port");
 #endif
   disp_msg = cmdl.exist("disp_msg");
@@ -81,15 +88,21 @@ int main(int argc, char *argv[]) {
   try {
     asio::io_context io_context;
 
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER == 1
     Websocket_server websocket_server;
-#else
-    int websocket_server; //keep complier happy
+#elif ENABLE_WEB_SERVER == 2
+    Sse_server sse_server;
 #endif
 
     Tcp_server tcp_server(io_context, tcp_server_port);
 
+#if ENABLE_WEB_SERVER == 1
     Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &websocket_server](const std::string &msg) {
+#elif ENABLE_WEB_SERVER == 2
+    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &sse_server](const std::string &msg) {
+#else
+    Udp_server udp_server(io_context, udp_server_port, [&tcp_server](const std::string &msg) {
+#endif
       if (disp_msg) {
         std::cout << msg << std::flush;
       }
@@ -97,14 +110,18 @@ int main(int argc, char *argv[]) {
         LOG_TRACE(msg);
       }
       tcp_server.broadcast_message(msg);
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER == 1
       if (websocket_server.is_listening()) {
         websocket_server.broadcast_message(msg);
+      }
+#elif ENABLE_WEB_SERVER == 2
+      if (sse_server.is_listening()) {
+        sse_server.broadcast_message(msg);
       }
 #endif
     });
 
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER == 1
     thread websocket_proc_thread([&] {
       websocket_server.process_messages();
       LOG_INFO("Websocket process thread exit.\n");
@@ -118,6 +135,15 @@ int main(int argc, char *argv[]) {
       }
       LOG_INFO("Websocket main thread exit.\n");
     });
+#elif ENABLE_WEB_SERVER == 2
+    std::thread sse_main_thread([&] {
+      try {
+        sse_server.run(web_server_port);
+      } catch (std::exception const &e) {
+        LOG_ERR("SSE server exception: {}\n", e.what());
+      }
+      LOG_INFO("SSE main thread exit.\n");
+    });
 #endif
 
     asio::signal_set signals(io_context, SIGINT);
@@ -126,8 +152,10 @@ int main(int argc, char *argv[]) {
       udp_server.stop();
       tcp_server.stop();
       io_context.stop();
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER == 1
       websocket_server.stop();
+#elif ENABLE_WEB_SERVER == 2
+      sse_server.stop();
 #endif
     });
 
@@ -137,10 +165,13 @@ int main(int argc, char *argv[]) {
     LOG_INFO("TCP server stopped.\n");
     LOG_INFO("UDP server stopped.\n");
 
-#ifdef ENABLE_WEB_SERVER
+#if ENABLE_WEB_SERVER == 1
     websocket_proc_thread.join();
     websocket_main_thread.join();
     LOG_INFO("Websocket server stopped.\n");
+#elif ENABLE_WEB_SERVER == 2
+    sse_main_thread.join();
+    LOG_INFO("SSE server stopped.\n");
 #endif
   } catch (std::exception &e) {
     LOG_ERR("Log server exception: {}\n", e.what());
