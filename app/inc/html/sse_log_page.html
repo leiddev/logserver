@@ -2,240 +2,307 @@ u8R"xxx(
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>日志监控 (SSE)</title>
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-    #title {
-      text-align: left;
-      font-size: 24px;
-      background-color: #f0f0f0;
-      padding: 10px 10px 0px 10px;
-    }
-    #controls {
-      padding: 10px;
-      background-color: #f0f0f0;
-      border-bottom: 1px solid #ccc;
-    }
-    #controls button {
-      margin-right: 10px;
-      padding: 8px 15px;
-      font-size: 14px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background-color 0.2s ease, color 0.2s ease;
-    }
-    .connect-btn {
-      background-color: #28a745;
-      color: white;
-    }
-    .disconnect-btn {
-      background-color: #dc3545;
-      color: white;
-    }
-    .scroll-on {
-      background-color: #007bff;
-      color: white;
-    }
-    .scroll-off {
-      background-color: #6c757d;
-      color: white;
-    }
-    #clearLogBtn {
-      background-color: #ffc107;
-      color: black;
-    }
-    #saveLogBtn {
-      background-color: #17a2b8;
-      color: white;
-    }
-    #log-box {
-      flex: 1;
-      min-height: 300px;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      padding: 10px;
-      background-color: #f9f9f9;
-      font-family: Consolas, "Courier New", monospace;
-      white-space: pre-wrap;
-    }
-    #status {
-      font-size: 12px;
-      color: #666;
-      margin-left: 15px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>日志监控 (SSE)</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #title {
+            text-align: left;
+            font-size: 24px;
+            background-color: #f0f0f0;
+            padding: 10px 10px 0px 10px;
+        }
+
+        #controls {
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+        }
+
+            #controls button {
+                margin-right: 10px;
+                padding: 8px 15px;
+                font-size: 14px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background-color 0.2s ease, color 0.2s ease;
+            }
+
+        .connect-btn {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .disconnect-btn {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .scroll-on {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .scroll-off {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        #clearLogBtn {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        #saveLogBtn {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        #log-box {
+            flex: 1;
+            min-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+            font-family: Consolas, "Courier New", monospace;
+            white-space: pre-wrap;
+        }
+
+        #status {
+            font-size: 12px;
+            color: #666;
+            margin-left: 15px;
+        }
+    </style>
 </head>
 <body>
-  <div id="container">
-    <div id="title">日志监控<span id="status"></span></div>
-    
-    <div id="controls">
-      <button id="toggleConnectBtn" class="connect-btn">启动</button>
-      <button id="toggleScrollBtn" class="scroll-on">自动滚动</button>
-      <button id="clearLogBtn">清空</button>
-      <button id="saveLogBtn">保存</button>
+    <div id="container">
+        <div id="title">日志监控<span id="status"></span></div>
+
+        <div id="controls">
+            <button id="toggleConnectBtn" class="connect-btn">启动</button>
+            <button id="toggleScrollBtn" class="scroll-on">自动滚动</button>
+            <button id="clearLogBtn">清空</button>
+            <button id="saveLogBtn">保存</button>
+        </div>
+
+        <div id="log-box"></div>
     </div>
 
-    <div id="log-box"></div>
-  </div>
+    <script>
+        let eventSource = null;
+        let autoScroll = true;
+        const maxLogLines = 10000;
+        const removeBatchSize = 500;   // 一次删除的旧日志数量，减少 DOM 操作频率
+        const flushInterval = 50;      // 批量写入间隔（毫秒）
+        const reconnectDelay = 3000;
+        let manualClose = false;
+        let retryCount = 0;
 
-  <script>
-    let eventSource = null;
-    let autoScroll = true;
-    const maxLogLines = 10000;
-    const reconnectDelay = 3000;
-    let manualClose = false;
-    let retryCount = 0;
+        // 消息缓冲与定时器
+        let pendingLogs = [];
+        let flushTimer = null;
 
-    function appendLog(message, type = "normal") {
-      const logBox = document.getElementById("log-box");
-      const line = document.createElement("div");
-      line.textContent = message;
-      if (type === "error") line.style.color = "red";
-      else if (type === "info") line.style.color = "blue";
-      logBox.appendChild(line);
-      if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
-      const logLines = logBox.querySelectorAll('div');
-      if (logLines.length > maxLogLines) logBox.removeChild(logLines[0]);
-    }
-
-    function updateStatus(text) {
-      document.getElementById("status").textContent = text;
-    }
-
-    function connectSSE() {
-      if (eventSource) {
-        eventSource.close();
-      }
-
-      manualClose = false;
-      const sseUrl = '/sse';
-      appendLog("SSE 正在连接 " + sseUrl + " ...", "info");
-      updateStatus("连接中...");
-
-      eventSource = new EventSource(sseUrl);
-
-      eventSource.onopen = () => {
-        appendLog("SSE 连接成功", "info");
-        updateConnectButton(true);
-        updateStatus("已连接");
-        retryCount = 0;
-      };
-
-      eventSource.onmessage = (event) => {
-        if (event.data === '[heartbeat]') {
-          return;
+        /**
+         * 将日志加入缓冲队列，由 flushLogs 统一批量写入 DOM
+         */
+        function appendLog(message, type = "normal") {
+            pendingLogs.push({ message, type });
+            if (!flushTimer) {
+                flushTimer = setTimeout(flushLogs, flushInterval);
+            }
         }
-        let logType = "normal";
-        const msg = event.data.toLowerCase();
-        if (msg.includes("critical") || 
-            msg.includes("warning") || 
-            msg.includes("error")) {
-          logType = "error";
+
+        /**
+         * 批量将缓冲中的日志写入 DOM，并清理超出上限的旧日志
+         */
+        function flushLogs() {
+            flushTimer = null;
+            if (pendingLogs.length === 0) return;
+
+            const logBox = document.getElementById("log-box");
+            const fragment = document.createDocumentFragment();
+
+            for (const item of pendingLogs) {
+                const line = document.createElement("div");
+                line.textContent = item.message;
+                if (item.type === "error") {
+                    line.style.color = "red";
+                } else if (item.type === "info") {
+                    line.style.color = "blue";
+                }
+                fragment.appendChild(line);
+            }
+            pendingLogs.length = 0;
+            logBox.appendChild(fragment);
+
+            // 批量删除旧日志：一次多删一些，降低后续触发频率
+            if (logBox.children.length > maxLogLines) {
+                const toRemove = logBox.children.length - maxLogLines + removeBatchSize;
+                for (let i = 0; i < toRemove && logBox.firstChild; i++) {
+                    logBox.removeChild(logBox.firstChild);
+                }
+            }
+
+            // 使用 requestAnimationFrame 避免同步强制布局
+            if (autoScroll) {
+                requestAnimationFrame(() => {
+                    logBox.scrollTop = logBox.scrollHeight;
+                });
+            }
         }
-        appendLog(event.data, logType);
-      };
 
-      eventSource.onerror = (event) => {
-        appendLog("SSE 连接错误", "error");
-        updateStatus("连接错误");
-        updateConnectButton(false);
-
-        if (!manualClose) {
-          if (retryCount < 3) {
-            retryCount++;
-            appendLog("SSE 连接断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
-            updateStatus("重连中...");
-            setTimeout(connectSSE, reconnectDelay);
-          } else {
-            appendLog("SSE 重连失败，停止尝试", "error");
-            updateStatus("重连失败");
-          }
+        function updateStatus(text) {
+            document.getElementById("status").textContent = text;
         }
-      };
-    }
 
-    function disconnectSSE() {
-      if (eventSource) {
-        manualClose = true;
-        eventSource.close();
-        eventSource = null;
-        appendLog("SSE 连接已关闭", "info");
-        updateStatus("已断开");
-      }
-    }
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
 
-    function updateConnectButton(connected) {
-      const btn = document.getElementById("toggleConnectBtn");
-      if (connected) {
-        btn.textContent = "停止";
-        btn.classList.remove("connect-btn");
-        btn.classList.add("disconnect-btn");
-      } else {
-        btn.textContent = "启动";
-        btn.classList.remove("disconnect-btn");
-        btn.classList.add("connect-btn");
-      }
-    }
+            manualClose = false;
+            const sseUrl = '/sse';
+            appendLog("SSE 正在连接 " + sseUrl + " ...", "info");
+            updateStatus("连接中...");
 
-    function toggleAutoScroll() {
-      autoScroll = !autoScroll;
-      const btn = document.getElementById("toggleScrollBtn");
-      if (autoScroll) {
-        btn.textContent = "自动滚动";
-        btn.classList.remove("scroll-off");
-        btn.classList.add("scroll-on");
-      } else {
-        btn.textContent = "自动滚动";
-        btn.classList.remove("scroll-on");
-        btn.classList.add("scroll-off");
-      }
-    }
+            eventSource = new EventSource(sseUrl);
 
-    function clearLogBox() {
-      document.getElementById("log-box").innerHTML = "";
-    }
+            eventSource.onopen = () => {
+                appendLog("SSE 连接成功", "info");
+                updateConnectButton(true);
+                updateStatus("已连接");
+                retryCount = 0;
+            };
 
-    function saveLog() {
-      const logBox = document.getElementById("log-box");
-      let logContent = logBox.innerText.replace(/\n\s*\n/g, '\n');
-      const now = new Date();
-      const filename = `log_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_`
-                    + `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}.txt`;
-      const blob = new Blob([logContent], { type: 'text/plain' });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+            eventSource.onmessage = (event) => {
+                if (event.data === '[heartbeat]') {
+                    return;
+                }
+                let logType = "normal";
+                const msg = event.data.toLowerCase();
+                if (msg.includes("critical") ||
+                    msg.includes("warning") ||
+                    msg.includes("error")) {
+                    logType = "error";
+                }
+                appendLog(event.data, logType);
+            };
 
-    document.getElementById("toggleConnectBtn").addEventListener("click", () => {
-      if (eventSource) {
-        disconnectSSE();
-        updateConnectButton(false);
-      } else {
-        retryCount = 0;
-        connectSSE();
-      }
-    });
+            eventSource.onerror = (event) => {
+                appendLog("SSE 连接错误", "error");
+                updateStatus("连接错误");
+                updateConnectButton(false);
 
-    document.getElementById("toggleScrollBtn").addEventListener("click", toggleAutoScroll);
-    document.getElementById("clearLogBtn").addEventListener("click", clearLogBox);
-    document.getElementById("saveLogBtn").addEventListener("click", saveLog);
-  </script>
+                if (!manualClose) {
+                    if (retryCount < 3) {
+                        retryCount++;
+                        appendLog("SSE 连接断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
+                        updateStatus("重连中...");
+                        setTimeout(connectSSE, reconnectDelay);
+                    } else {
+                        appendLog("SSE 重连失败，停止尝试", "error");
+                        updateStatus("重连失败");
+                    }
+                }
+            };
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                manualClose = true;
+                eventSource.close();
+                eventSource = null;
+                appendLog("SSE 连接已关闭", "info");
+                updateStatus("已断开");
+            }
+        }
+
+        function updateConnectButton(connected) {
+            const btn = document.getElementById("toggleConnectBtn");
+            if (connected) {
+                btn.textContent = "停止";
+                btn.classList.remove("connect-btn");
+                btn.classList.add("disconnect-btn");
+            } else {
+                btn.textContent = "启动";
+                btn.classList.remove("disconnect-btn");
+                btn.classList.add("connect-btn");
+            }
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            const btn = document.getElementById("toggleScrollBtn");
+            if (autoScroll) {
+                btn.textContent = "自动滚动";
+                btn.classList.remove("scroll-off");
+                btn.classList.add("scroll-on");
+            } else {
+                btn.textContent = "自动滚动";
+                btn.classList.remove("scroll-on");
+                btn.classList.add("scroll-off");
+            }
+        }
+
+        function clearLogBox() {
+            // 清空缓冲和定时器，防止后续 flush 把旧数据写回来
+            pendingLogs = [];
+            if (flushTimer) {
+                clearTimeout(flushTimer);
+                flushTimer = null;
+            }
+            document.getElementById("log-box").innerHTML = "";
+        }
+
+        function saveLog() {
+            // 保存前强制刷新缓冲，确保最新日志也被导出
+            if (flushTimer) {
+                clearTimeout(flushTimer);
+                flushLogs();
+            }
+
+            const logBox = document.getElementById("log-box");
+            let logContent = logBox.innerText.replace(/\n\s*\n/g, '\n');
+            const now = new Date();
+            const filename = `log_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_`
+                + `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}.txt`;
+            const blob = new Blob([logContent], { type: 'text/plain' });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        document.getElementById("toggleConnectBtn").addEventListener("click", () => {
+            if (eventSource) {
+                disconnectSSE();
+                updateConnectButton(false);
+            } else {
+                retryCount = 0;
+                connectSSE();
+            }
+        });
+
+        document.getElementById("toggleScrollBtn").addEventListener("click", toggleAutoScroll);
+        document.getElementById("clearLogBtn").addEventListener("click", clearLogBox);
+        document.getElementById("saveLogBtn").addEventListener("click", saveLog);
+    </script>
 </body>
 </html>
 )xxx"
