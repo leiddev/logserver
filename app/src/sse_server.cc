@@ -283,7 +283,23 @@ void Sse_server::remove_client(std::weak_ptr<SseClient> client) {
 }
 
 std::string Sse_server::format_sse_event(const std::string& message) {
-    return std::string(SSE_EVENT_PREFIX) + message + std::string(SSE_EVENT_SUFFIX);
+    std::string result;
+
+    std::string normalized = message;
+    size_t pos = 0;
+    while ((pos = normalized.find("\r\n", pos)) != std::string::npos) {
+        normalized.erase(pos, 1);
+    }
+
+    std::istringstream stream(normalized);
+    std::string line;
+    while (std::getline(stream, line)) {
+        result += SSE_EVENT_PREFIX;
+        result += line;
+        result += '\n';
+    }
+    result += SSE_EVENT_SUFFIX;
+    return result;
 }
 
 std::string Sse_server::get_content_type(const std::string& path) {
