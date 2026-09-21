@@ -24,11 +24,11 @@
 ```
 usage: ./LogServer [options] ...
 options:
-  -u, --udp port     UDP port number (int [=11000])
-  -t, --tcp port     TCP port number (int [=11000])
-  -s, --max files    Maximum number of files (int [=100])
+  -u, --udp_port     UDP port number (int [=11000])
+  -t, --tcp_port     TCP port number (int [=11000])
+  -s, --max_files    Maximum number of files (int [=100])
       --disp_msg     display receive message
-  -w, --web port     Web port number (int [=11001])
+  -w, --web_port     Web port number (int [=11001])
   -?, --help         print this message
 ```
 

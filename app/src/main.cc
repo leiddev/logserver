@@ -29,12 +29,12 @@ int main(int argc, char *argv[]) {
   const std::string app_name{"LogServer"};
 
   cmdline::parser cmdl;
-  cmdl.add<int>("udp port", 'u', "UDP port number", false, 11000, cmdline::range(1, 65535));
-  cmdl.add<int>("tcp port", 't', "TCP port number", false, 11000, cmdline::range(1, 65535));
-  cmdl.add<int>("max files", 's', "Maximum number of files", false, 100, cmdline::range(1, 1000));
+  cmdl.add<int>("udp_port", 'u', "UDP port number", false, 11000, cmdline::range(1, 65535));
+  cmdl.add<int>("tcp_port", 't', "TCP port number", false, 11000, cmdline::range(1, 65535));
+  cmdl.add<int>("max_files", 's', "Maximum number of files", false, 100, cmdline::range(0, 1000));
   cmdl.add("disp_msg", '\0', "display receive message");
 #if ENABLE_WEB_SERVER != 0
-  cmdl.add<int>("web port", 'w', "Web port number", false, 11001, cmdline::range(1, 65535));
+  cmdl.add<int>("web_port", 'w', "Web port number", false, 11001, cmdline::range(1, 65535));
 #endif
   cmdl.parse_check(argc, argv);
 
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
   std::string log_file_name = "logserver.txt";
   std::string log_file_path;
   size_t max_log_file_size = 1024 * 1024;
-  size_t max_log_files = cmdl.get<int>("max files");
+  size_t max_log_files = cmdl.get<int>("max_files");
 
 #ifdef _WIN32
   log_file_path = ".\\log\\";
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
   mkpath(log_file_path, 0777);
 #endif
 
-  if (isTempFS(log_file_path)) {
+  if ((max_log_files > 0) && isTempFS(log_file_path)) {
     LOG_INFO("Log file path: {}\n", log_file_path);
     std::string full_path = log_file_path + log_file_name;
     bl::Log::getInstance().init(full_path, logger_name, logger_level, max_log_file_size, max_log_files);
@@ -77,10 +77,10 @@ int main(int argc, char *argv[]) {
     bl::Log::getInstance().init(logger_name, logger_level);
   }
 
-  uint16_t udp_server_port = cmdl.get<int>("udp port");
-  uint16_t tcp_server_port = cmdl.get<int>("tcp port");
+  uint16_t udp_server_port = cmdl.get<int>("udp_port");
+  uint16_t tcp_server_port = cmdl.get<int>("tcp_port");
 #if ENABLE_WEB_SERVER != 0
-  uint16_t web_server_port = cmdl.get<int>("web port");
+  uint16_t web_server_port = cmdl.get<int>("web_port");
 #endif
   disp_msg = cmdl.exist("disp_msg");
   LOG_INFO("Display message: {}\n", disp_msg);
