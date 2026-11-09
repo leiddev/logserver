@@ -25,7 +25,6 @@
 
 namespace {
 
-const char *const kFileSuffix = ".log";
 const char *const kArchiveSeparator = "_";
 
 #ifdef _WIN32
@@ -208,11 +207,10 @@ std::vector<std::string> listDir(const std::string &dir) {
 
 #endif
 
-bool isArchiveName(const std::string &name, const std::string &prefix) {
-  std::size_t suffix_size = std::strlen(kFileSuffix);
-  return name.size() > prefix.size() + suffix_size &&
+bool isArchiveName(const std::string &name, const std::string &prefix, const std::string &suffix) {
+  return name.size() > prefix.size() + suffix.size() &&
          name.compare(0, prefix.size(), prefix) == 0 &&
-         name.compare(name.size() - suffix_size, suffix_size, kFileSuffix) == 0;
+         name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 // Local time with millisecond resolution, e.g. "20261109_143005_123".
@@ -284,7 +282,7 @@ void Logger::setLevel(Level level) {
 }
 
 bool Logger::initFile(const std::string &dir, const std::string &base_name, std::size_t max_file_size,
-                      std::size_t max_files) {
+                      std::size_t max_files, const std::string &suffix) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   // max_files == 0 means the caller does not want file logging at all (-s 0),
@@ -294,6 +292,10 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
   }
   if (max_file_size == 0) {
     reportDisabled(__FILE__, __LINE__, "max_file_size is zero");
+    return false;
+  }
+  if (suffix.empty()) {
+    reportDisabled(__FILE__, __LINE__, "file suffix is empty");
     return false;
   }
   if (!makePath(dir)) {
@@ -306,9 +308,10 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
   closeFileLocked();
   dir_ = dir;
   base_name_ = base_name;
+  suffix_ = suffix;
   max_file_size_ = max_file_size;
   max_files_ = max_files;
-  base_path_ = joinPath(dir_, base_name_ + kFileSuffix);
+  base_path_ = joinPath(dir_, base_name_ + suffix_);
 
   if (!openFileLocked()) {
     return false;
@@ -397,13 +400,13 @@ void Logger::writeFileLocked(const char *data, std::size_t length) {
 
 std::string Logger::archivePathLocked() {
   std::string base = joinPath(dir_, base_name_ + kArchiveSeparator + timestampSuffix());
-  std::string path = base + kFileSuffix;
+  std::string path = base + suffix_;
 
   int index = 1;
   while (pathExists(path)) {
-    char suffix[16] = {0};
-    std::snprintf(suffix, sizeof(suffix), "%s%03d", kArchiveSeparator, index++);
-    path = base + suffix + kFileSuffix;
+    char collision[16] = {0};
+    std::snprintf(collision, sizeof(collision), "%s%03d", kArchiveSeparator, index++);
+    path = base + collision + suffix_;
   }
   return path;
 }
@@ -433,7 +436,7 @@ void Logger::cleanupLocked() {
   std::vector<std::string> archives;
   std::vector<std::string> names = listDir(dir_);
   for (std::size_t i = 0; i < names.size(); ++i) {
-    if (isArchiveName(names[i], prefix)) {
+    if (isArchiveName(names[i], prefix, suffix_)) {
       archives.push_back(joinPath(dir_, names[i]));
     }
   }

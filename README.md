@@ -15,7 +15,7 @@
 - 可设置接收日志的 UDP 端口号；
 - 可设置对外提供日志的 TCP 服务端口号；
 - 抓取到的日志信息会保存在 `/tmp/log/` 目录里面（Windows 下为 `.\log\`），仅当该目录为临时文件系统 `tmpfs` 时落盘，避免在嵌入式设备上写 flash（Windows 下无此限制，始终落盘）；
-- 日志文件按照 1MB 大小自动切分，归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.log`；
+- 日志文件按照 1MB 大小自动切分，归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.txt`；文件后缀可在 `txt`（默认）与 `log` 之间选择；
 - 可设置最大保存文件数量，当前文件与归档文件的总数超过该值后，删除最旧的归档文件；
 - 可设置是否显示接收到的日志信息；
 - 具备 Web 前端界面，可配置 Web 服务器端口号；
@@ -30,6 +30,7 @@ options:
   -u, --udp_port     UDP port number (int [=11000])
   -t, --tcp_port     TCP port number (int [=11000])
   -s, --max_files    Maximum number of files (int [=100])
+  -x, --log_suffix   Log file suffix, txt or log (string [=txt])
       --disp_msg     display receive message
   -w, --web_port     Web port number (int [=11001])
   -?, --help         print this message
@@ -37,10 +38,12 @@ options:
 
 **日志文件说明：**
 
-- 正在写入的文件固定为 `logserver.log`，可用 `tail -f logserver.log` 持续查看；
-- 当前文件超过 1MB 时，先按本地日期时间（精确到毫秒）改名为归档文件，例如 `logserver_20261109_143005_123.log`，再重新创建 `logserver.log`；
-- 若同一毫秒内发生多次切分，归档文件名会追加三位序号以避免覆盖，例如 `logserver_20261109_143005_123_001.log`；
+- 日志文件后缀由 `-x/--log_suffix` 决定，可取 `txt`（默认）或 `log`，只接受这两个值；
+- 正在写入的文件固定为 `logserver.txt`（使用 `-x log` 时为 `logserver.log`），可用 `tail -f` 持续查看；
+- 当前文件超过 1MB 时，先按本地日期时间（精确到毫秒）改名为归档文件，例如 `logserver_20261109_143005_123.txt`，再重新创建当前文件；
+- 若同一毫秒内发生多次切分，归档文件名会追加三位序号以避免覆盖，例如 `logserver_20261109_143005_123_001.txt`；
 - `-s/--max_files` 限制目录中日志文件的总数（当前文件 + 归档文件）。达到上限后每次切分都会删除最旧的归档文件；设为 `0` 表示不写日志文件，此时也不会创建日志目录；
+- 清理只针对当前后缀的归档文件：切换后缀后，另一种后缀的旧文件不会被自动删除；
 - 程序自身的运行日志带 `[APP] ` 前缀，与接收到的日志保存在同一个文件里；接收到的日志按原始内容写入，不添加前缀、时间戳或换行；
 - 接收到的日志是否同时输出到控制台由 `--disp_msg` 控制；
 - 文件日志未能启用时（日志目录不在 tmpfs 上、路径被同名文件占用、目录无法创建等），启动时会向 stderr 输出以 `file logging disabled:` 开头的原因说明；`-s 0` 属于主动关闭，不会有提示。

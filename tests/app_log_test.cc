@@ -102,6 +102,13 @@ std::string prepareDir(const std::string &name) {
   return dir;
 }
 
+// initFile defaults to the .txt suffix, so these tests use it too.
+const char kDefaultSuffix[] = ".txt";
+
+std::string currentFile() {
+  return std::string("logserver") + kDefaultSuffix;
+}
+
 std::vector<std::string> listFiles(const std::string &dir) {
   std::vector<std::string> names;
 
@@ -179,14 +186,14 @@ bool hasSuffix(const std::string &value, const std::string &suffix) {
          value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
-// <base>_YYYYMMDD_HHMMSS_mmm.log, with an optional _NNN index when two
+// <base>_YYYYMMDD_HHMMSS_mmm<suffix>, with an optional _NNN index when two
 // rotations land in the same millisecond.
-bool isArchiveName(const std::string &name) {
+bool isArchiveName(const std::string &name, const std::string &suffix) {
   const std::string base = "logserver";
-  if (!hasPrefix(name, base + "_") || !hasSuffix(name, ".log")) {
+  if (!hasPrefix(name, base + "_") || !hasSuffix(name, suffix)) {
     return false;
   }
-  std::string digits = name.substr(base.size() + 1, name.size() - 4 - (base.size() + 1));
+  std::string digits = name.substr(base.size() + 1, name.size() - suffix.size() - (base.size() + 1));
 
   // Collision suffix: _NNN with exactly three digits.
   if (digits.size() == 8 + 1 + 6 + 1 + 3 + 1 + 3 && digits[digits.size() - 4] == '_') {
@@ -285,7 +292,7 @@ TEST_CASE("raw writes are neither formatted nor terminated") {
   logger.writeRaw(payload, sizeof(payload) - 1);
 
   std::string content;
-  CHECK(readFile(dir + "logserver.log", &content));
+  CHECK(readFile(dir + currentFile(), &content));
   CHECK_EQ(std::string(payload, sizeof(payload) - 1), content);
 }
 
@@ -298,7 +305,7 @@ TEST_CASE("internal messages keep the [APP] prefix and go to the file") {
   logger.writef(applog::kInfo, "[APP] hello {}\n", "world");
 
   std::string content;
-  CHECK(readFile(dir + "logserver.log", &content));
+  CHECK(readFile(dir + currentFile(), &content));
   CHECK(content.find("[APP] hello world\n") != std::string::npos);
 }
 
@@ -308,12 +315,12 @@ TEST_CASE("level filters out messages below the threshold") {
   logger.setLevel(applog::kError);
   CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5));
 
-  const long before = fileSize(dir + "logserver.log");
+  const long before = fileSize(dir + currentFile());
   logger.writef(applog::kInfo, "[APP] dropped\n");
-  CHECK_EQ(before, fileSize(dir + "logserver.log"));
+  CHECK_EQ(before, fileSize(dir + currentFile()));
 
   logger.writef(applog::kError, "[APP] kept\n");
-  CHECK(fileSize(dir + "logserver.log") > before);
+  CHECK(fileSize(dir + currentFile()) > before);
   logger.setLevel(applog::kTrace);
 }
 
@@ -340,12 +347,12 @@ TEST_CASE("rotation archives with a timestamp and honours max_files") {
   bool size_ok = true;
   bool naming_ok = true;
   for (std::size_t i = 0; i < files.size(); ++i) {
-    if (files[i] == "logserver.log") {
+    if (files[i] == currentFile()) {
       ++current;
       continue;
     }
     ++archives;
-    if (!isArchiveName(files[i])) {
+    if (!isArchiveName(files[i], kDefaultSuffix)) {
       naming_ok = false;
       std::fprintf(stderr, "unexpected archive name: %s\n", files[i].c_str());
     }
@@ -359,21 +366,94 @@ TEST_CASE("rotation archives with a timestamp and honours max_files") {
   CHECK(size_ok);
 }
 
+TEST_CASE("a .log suffix renames the current file and its archives") {
+  const std::string dir = prepareDir("suffix_log");
+  const std::string suffix = ".log";
+  const std::size_t max_size = 16 * 1024;
+  const std::size_t max_files = 3;
+
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  CHECK(logger.initFile(dir, "logserver", max_size, max_files, suffix));
+  CHECK(logger.filePath() == dir + "logserver.log");
+
+  std::string chunk(999, 'S');
+  chunk += '\n';
+  for (int i = 0; i < 100; ++i) {
+    logger.writeRaw(chunk.data(), chunk.size());
+  }
+
+  const std::vector<std::string> files = listFiles(dir);
+  CHECK_EQ(max_files, files.size());
+
+  bool naming_ok = true;
+  std::size_t current = 0;
+  for (std::size_t i = 0; i < files.size(); ++i) {
+    if (files[i] == "logserver.log") {
+      ++current;
+      continue;
+    }
+    if (!isArchiveName(files[i], suffix)) {
+      naming_ok = false;
+      std::fprintf(stderr, "unexpected archive name: %s\n", files[i].c_str());
+    }
+  }
+  CHECK_EQ(std::size_t(1), current);
+  CHECK(naming_ok);
+}
+
+TEST_CASE("cleanup ignores files with the other suffix") {
+  const std::string dir = prepareDir("suffix_mix");
+  const std::size_t max_size = 8 * 1024;
+
+  // Leftovers from a run that used the .txt suffix.
+  {
+    std::FILE *txt = std::fopen((dir + "logserver_20260101_000000_000.txt").c_str(), "wb");
+    CHECK(txt != nullptr);
+    if (txt) {
+      std::fwrite("x", 1, 1, txt);
+      std::fclose(txt);
+    }
+  }
+
+  applog::Logger &logger = applog::Logger::instance();
+  CHECK(logger.initFile(dir, "logserver", max_size, 2, ".log"));
+
+  std::string chunk(999, 'T');
+  chunk += '\n';
+  for (int i = 0; i < 40; ++i) {
+    logger.writeRaw(chunk.data(), chunk.size());
+  }
+
+  const std::vector<std::string> files = listFiles(dir);
+  std::size_t log_files = 0;
+  bool txt_kept = false;
+  for (std::size_t i = 0; i < files.size(); ++i) {
+    if (hasSuffix(files[i], ".txt")) {
+      txt_kept = true;
+    } else {
+      ++log_files;
+    }
+  }
+  CHECK_EQ(std::size_t(2), log_files);
+  CHECK(txt_kept);
+}
+
 TEST_CASE("initFile again appends to the existing current file") {
   const std::string dir = prepareDir("restart");
   applog::Logger &logger = applog::Logger::instance();
 
   CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5));
   logger.writeRaw("first\n", 6);
-  const long after_first = fileSize(dir + "logserver.log");
+  const long after_first = fileSize(dir + currentFile());
   CHECK_EQ(long(6), after_first);
 
   CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5));
   logger.writeRaw("second\n", 7);
-  CHECK_EQ(after_first + 7, fileSize(dir + "logserver.log"));
+  CHECK_EQ(after_first + 7, fileSize(dir + currentFile()));
 
   std::string content;
-  CHECK(readFile(dir + "logserver.log", &content));
+  CHECK(readFile(dir + currentFile(), &content));
   CHECK_EQ(std::string("first\nsecond\n"), content);
 }
 

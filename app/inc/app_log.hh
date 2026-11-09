@@ -56,14 +56,15 @@ class Logger {
 
   void setLevel(Level level);
 
-  // Enable file logging: <dir>/<base_name>.log is the current file, and every
-  // rotation renames it to <dir>/<base_name>_YYYYMMDD_HHMMSS_mmm.log, with a
-  // _NNN index appended when two rotations land in the same millisecond.
+  // Enable file logging: <dir>/<base_name><suffix> is the current file, and
+  // every rotation renames it to
+  // <dir>/<base_name>_YYYYMMDD_HHMMSS_mmm<suffix>, with a _NNN index appended
+  // when two rotations land in the same millisecond.
   // At most max_files files (current file included) are kept.
   // Returns false when max_files is zero or dir is not on a temporary file
   // system (writing flash on embedded devices should be avoided).
   bool initFile(const std::string &dir, const std::string &base_name, std::size_t max_file_size,
-                std::size_t max_files);
+                std::size_t max_files, const std::string &suffix = ".txt");
 
   template <typename... Args>
   void writef(Level level, const char *fmt, const Args &...args) {
@@ -94,6 +95,7 @@ class Logger {
   Level level_ = kTrace;
   std::string dir_;
   std::string base_name_;
+  std::string suffix_;
   std::string base_path_;
   std::size_t max_file_size_ = 0;
   std::size_t max_files_ = 0;
