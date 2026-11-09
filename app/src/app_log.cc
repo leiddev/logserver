@@ -27,6 +27,11 @@ namespace {
 
 const char *const kArchiveSeparator = "_";
 
+// How often writeFileLocked verifies that the open file is still the one at
+// base_path_. Whichever comes first: this many writes, or this much time.
+const std::size_t kCheckIntervalWrites = 32;
+const std::chrono::milliseconds kCheckInterval(1000);
+
 #ifdef _WIN32
 const char *const kPathSeparator = "\\";
 #else
@@ -312,6 +317,8 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
   max_file_size_ = max_file_size;
   max_files_ = max_files;
   base_path_ = joinPath(dir_, base_name_ + suffix_);
+  writes_since_check_ = 0;
+  last_check_ = std::chrono::steady_clock::now();
 
   if (!openFileLocked()) {
     return false;
@@ -375,6 +382,50 @@ void Logger::closeFileLocked() {
   current_size_ = 0;
 }
 
+void Logger::reopenIfReplacedLocked() {
+  if (!file_) {
+    return;
+  }
+
+#ifdef _WIN32
+  // Windows keeps the file locked against deletion while it is open, so the
+  // path cannot point at a different file. Nothing to check.
+#else
+  struct stat path_info;
+  if (::stat(base_path_.c_str(), &path_info) != 0) {
+    // The file, or its whole directory, was removed from outside.
+    std::fprintf(stderr, "[APP] [%s:%d] log file %s disappeared, recreating it\n", __FILE__, __LINE__,
+                 base_path_.c_str());
+    closeFileLocked();
+    makePath(dir_);
+    openFileLocked();
+    return;
+  }
+
+  struct stat fd_info;
+  if (::fstat(::fileno(file_), &fd_info) != 0) {
+    closeFileLocked();
+    openFileLocked();
+    return;
+  }
+
+  if (path_info.st_dev != fd_info.st_dev || path_info.st_ino != fd_info.st_ino) {
+    // Removed and replaced, or renamed away with a new file at the same path.
+    std::fprintf(stderr, "[APP] [%s:%d] log file %s was replaced, reopening it\n", __FILE__, __LINE__,
+                 base_path_.c_str());
+    closeFileLocked();
+    openFileLocked();
+    return;
+  }
+
+  // Same inode but shorter than what we accounted for: truncated in place,
+  // as logrotate's copytruncate does. Keep writing from the new end.
+  if (path_info.st_size < static_cast<off_t>(current_size_)) {
+    current_size_ = static_cast<std::size_t>(path_info.st_size);
+  }
+#endif
+}
+
 void Logger::writeFileLocked(const char *data, std::size_t length) {
   if (max_files_ == 0) {
     return;
@@ -382,6 +433,18 @@ void Logger::writeFileLocked(const char *data, std::size_t length) {
   if (!file_ && !openFileLocked()) {
     return;
   }
+
+  ++writes_since_check_;
+  if (writes_since_check_ >= kCheckIntervalWrites ||
+      std::chrono::steady_clock::now() - last_check_ >= kCheckInterval) {
+    writes_since_check_ = 0;
+    last_check_ = std::chrono::steady_clock::now();
+    reopenIfReplacedLocked();
+    if (!file_) {
+      return;
+    }
+  }
+
   if (current_size_ > 0 && current_size_ + length > max_file_size_) {
     rotateLocked();
     if (!file_) {

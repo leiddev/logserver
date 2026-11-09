@@ -6,6 +6,7 @@
 #ifndef _APP_LOG_HH_
 #define _APP_LOG_HH_
 
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <mutex>
@@ -86,6 +87,10 @@ class Logger {
   bool openFileLocked();
   void closeFileLocked();
   void writeFileLocked(const char *data, std::size_t length);
+  // Reopen the file when it was removed, replaced or truncated from outside,
+  // so writes never go to an unreachable inode. Checked at most once every
+  // kCheckIntervalWrites writes or kCheckInterval after the previous check.
+  void reopenIfReplacedLocked();
   void rotateLocked();
   void cleanupLocked();
   std::string archivePathLocked();
@@ -100,6 +105,8 @@ class Logger {
   std::size_t max_file_size_ = 0;
   std::size_t max_files_ = 0;
   std::size_t current_size_ = 0;
+  std::size_t writes_since_check_ = 0;
+  std::chrono::steady_clock::time_point last_check_ = std::chrono::steady_clock::now();
   std::FILE *file_ = nullptr;
   bool open_error_reported_ = false;
 };

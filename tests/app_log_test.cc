@@ -457,6 +457,139 @@ TEST_CASE("initFile again appends to the existing current file") {
   CHECK_EQ(std::string("first\nsecond\n"), content);
 }
 
+#ifndef _WIN32
+// On Windows an open file cannot be deleted, so these cases are POSIX only.
+// The logger re-checks the file at most every 32 writes or every second, so
+// the assertions look at what lands after the check rather than exact counts.
+
+// True when every line in the file is one chunk of `size` bytes.
+bool onlyWholeRecords(const std::string &content, std::size_t size) {
+  if (content.empty() || content.size() % size != 0) {
+    return false;
+  }
+  for (std::size_t pos = 0; pos < content.size(); pos += size) {
+    if (content[pos + size - 1] != '\n') {
+      return false;
+    }
+  }
+  return true;
+}
+
+TEST_CASE("recreates the log file after it is removed") {
+  const std::string dir = prepareDir("recreate_removed");
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5));
+
+  const std::string chunk(99, 'A');
+  std::string record = chunk + '\n';
+  for (int i = 0; i < 40; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+  CHECK(fileSize(dir + currentFile()) > 0);
+
+  std::remove((dir + currentFile()).c_str());
+  for (int i = 0; i < 100; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+
+  std::string content;
+  CHECK(readFile(dir + currentFile(), &content));
+  CHECK(!content.empty());
+  CHECK(onlyWholeRecords(content, record.size()));
+}
+
+TEST_CASE("recreates the log file and its directory after both are removed") {
+  const std::string dir = prepareDir("recreate_dir");
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5));
+
+  const std::string chunk(99, 'B');
+  std::string record = chunk + '\n';
+  for (int i = 0; i < 40; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+
+  removeDir(dir);
+  CHECK(fileSize(dir + currentFile()) < 0);
+
+  for (int i = 0; i < 100; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+
+  std::string content;
+  CHECK(readFile(dir + currentFile(), &content));
+  CHECK(!content.empty());
+  CHECK(onlyWholeRecords(content, record.size()));
+}
+
+TEST_CASE("follows a file that was renamed away") {
+  const std::string dir = prepareDir("recreate_renamed");
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5));
+
+  const std::string chunk(99, 'C');
+  std::string record = chunk + '\n';
+  for (int i = 0; i < 40; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+
+  CHECK_EQ(0, std::rename((dir + currentFile()).c_str(), (dir + "moved.txt").c_str()));
+  for (int i = 0; i < 100; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+
+  std::string content;
+  CHECK(readFile(dir + currentFile(), &content));
+  CHECK(!content.empty());
+  CHECK(onlyWholeRecords(content, record.size()));
+
+  // The renamed file keeps what was written before the move, plus whatever
+  // was written before the next check noticed the move.
+  std::string moved;
+  CHECK(readFile(dir + "moved.txt", &moved));
+  CHECK(moved.size() >= std::size_t(40 * 100));
+  CHECK(onlyWholeRecords(moved, record.size()));
+}
+
+TEST_CASE("keeps writing after the file is truncated in place") {
+  const std::string dir = prepareDir("copytruncate");
+  const std::size_t max_size = 16 * 1024;
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  CHECK(logger.initFile(dir, "logserver", max_size, 5));
+
+  const std::string chunk(99, 'D');
+  std::string record = chunk + '\n';
+  for (int i = 0; i < 40; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+  CHECK_EQ(std::size_t(4000), static_cast<std::size_t>(fileSize(dir + currentFile())));
+
+  // logrotate's copytruncate: empty the file without replacing the inode.
+  std::FILE *file = std::fopen((dir + currentFile()).c_str(), "wb");
+  CHECK(file != nullptr);
+  if (file) {
+    std::fclose(file);
+  }
+  CHECK_EQ(std::size_t(0), static_cast<std::size_t>(fileSize(dir + currentFile())));
+
+  // 132 records bring the real size to 13200 bytes, still under max_size. If
+  // the stale size were kept, the accounting would pass max_size and rotate.
+  for (int i = 0; i < 132; ++i) {
+    logger.writeRaw(record.data(), record.size());
+  }
+
+  std::string content;
+  CHECK(readFile(dir + currentFile(), &content));
+  CHECK_EQ(std::size_t(13200), content.size());
+  CHECK(onlyWholeRecords(content, record.size()));
+  CHECK_EQ(std::size_t(1), listFiles(dir).size());
+}
+#endif
+
 TEST_CASE("cleanup removes only this base name") {
   const std::string dir = prepareDir("cleanup");
   applog::Logger &logger = applog::Logger::instance();
