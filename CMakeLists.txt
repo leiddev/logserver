@@ -28,6 +28,12 @@ add_subdirectory(3rdparty ${CMAKE_BINARY_DIR}/out/3rdparty)
 # 添加 app 子目录
 add_subdirectory(app ${CMAKE_BINARY_DIR}/out/app)
 
+# 测试
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests ${CMAKE_BINARY_DIR}/out/tests)
+endif()
+
 # ---------------------------------------------------------------------------------------
 # 显示编译器和链接器设置
 # ---------------------------------------------------------------------------------------

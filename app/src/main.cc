@@ -7,7 +7,11 @@
 //   0 - Disable Web Server
 //   1 - Use WebSocket Server
 //   2 - Use SSE Server
+// Set by the WEBSERVER_TYPE CMake option; SSE is used when building this file
+// directly without CMake.
+#ifndef ENABLE_WEB_SERVER
 #define ENABLE_WEB_SERVER 2
+#endif
 
 #include <cmdline.h>
 #include "tcp_server.hh"

@@ -27,15 +27,37 @@ include_directories(inc)
 # 设置链接第三方库的路径
 #link_directories(${CMAKE_SOURCE_DIR}/3rdparty/xxx/lib
 
-# 查找所有源文件
+# 选择 Web 服务器类型: NONE, WEBSOCKET 或 SSE
+set(WEBSERVER_TYPE "SSE" CACHE STRING "Web server type: NONE, WEBSOCKET or SSE")
+set_property(CACHE WEBSERVER_TYPE PROPERTY STRINGS NONE WEBSOCKET SSE)
+
+if(WEBSERVER_TYPE STREQUAL "NONE")
+    set(ENABLE_WEB_SERVER 0)
+elseif(WEBSERVER_TYPE STREQUAL "WEBSOCKET")
+    set(ENABLE_WEB_SERVER 1)
+elseif(WEBSERVER_TYPE STREQUAL "SSE")
+    set(ENABLE_WEB_SERVER 2)
+else()
+    message(FATAL_ERROR "WEBSERVER_TYPE must be NONE, WEBSOCKET or SSE, got: ${WEBSERVER_TYPE}")
+endif()
+message(STATUS "WEBSERVER_TYPE = ${WEBSERVER_TYPE} (ENABLE_WEB_SERVER = ${ENABLE_WEB_SERVER})")
+
+# 日志模块独立成库，便于测试直接链接
+add_library(applog STATIC src/app_log.cc)
+target_include_directories(applog PUBLIC inc)
+
+# 查找所有源文件（app_log.cc 已编入库中）
 aux_source_directory(src SOURCES)
+list(FILTER SOURCES EXCLUDE REGEX "app_log\\.cc$")
 
 # 创建可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
+target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_WEB_SERVER=${ENABLE_WEB_SERVER})
 
 # 链接库文件
 target_link_libraries(
     ${PROJECT_NAME}
+    applog
     unicode_utility
     cmdline
     websocketpp
