@@ -1,16 +1,16 @@
 #ifndef _APP_COMMON_H_
 #define _APP_COMMON_H_
 
-#include <bl/log.h>
+#include "app_log.hh"
 
 #define APP_VERSION_STR      "V0.7"
 
-#define LOG_TRACE(...) spdlog::trace(__VA_ARGS__)
-#define LOG_DEBUG(...) spdlog::debug("[APP] " __VA_ARGS__)
-#define LOG_INFO(...) spdlog::info("[APP] " __VA_ARGS__)
-#define LOG_WARN(...) spdlog::warn("[APP] " __VA_ARGS__)
-#define LOG_ERR(...) spdlog::error("[APP] " __VA_ARGS__)
-#define LOG_CRITICAL(...) spdlog::critical("[APP] " __VA_ARGS__)
+#define LOG_TRACE(...) applog::Logger::instance().writef(applog::kTrace, __VA_ARGS__)
+#define LOG_DEBUG(...) applog::Logger::instance().writef(applog::kDebug, "[APP] " __VA_ARGS__)
+#define LOG_INFO(...) applog::Logger::instance().writef(applog::kInfo, "[APP] " __VA_ARGS__)
+#define LOG_WARN(...) applog::Logger::instance().writef(applog::kWarn, "[APP] " __VA_ARGS__)
+#define LOG_ERR(...) applog::Logger::instance().writef(applog::kError, "[APP] " __VA_ARGS__)
+#define LOG_CRITICAL(...) applog::Logger::instance().writef(applog::kCritical, "[APP] " __VA_ARGS__)
 
 
 #define CHECK_PTR(p)                                                       \

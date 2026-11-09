@@ -16,7 +16,6 @@
 #elif ENABLE_WEB_SERVER == 2
   #include "sse_server.hh"
 #endif
-#include "utility.hh"
 #include "common.h"
 
 #include <thread>
@@ -52,29 +51,21 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  std::string logger_name = app_name;
-  std::string logger_level = "trace";
-  std::string log_file_name = "logserver.txt";
-  std::string log_file_path;
+  std::string log_file_name = "logserver";
   size_t max_log_file_size = 1024 * 1024;
   size_t max_log_files = cmdl.get<int>("max_files");
 
 #ifdef _WIN32
-  log_file_path = ".\\log\\";
-  mkpath(log_file_path);
+  std::string log_file_path = ".\\log\\";
 #else
-  log_file_path = "/tmp/log/";
-  mkpath(log_file_path, 0777);
+  std::string log_file_path = "/tmp/log/";
 #endif
 
-  if ((max_log_files > 0) && isTempFS(log_file_path)) {
-    LOG_INFO("Log file path: {}\n", log_file_path);
-    std::string full_path = log_file_path + log_file_name;
-    bl::Log::getInstance().init(full_path, logger_name, logger_level, max_log_file_size, max_log_files);
-    bl::Log::getInstance().setPattern("%v");
-    log_msg = true;
-  } else {
-    bl::Log::getInstance().init(logger_name, logger_level);
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  log_msg = logger.initFile(log_file_path, log_file_name, max_log_file_size, max_log_files);
+  if (log_msg) {
+    LOG_INFO("Log file path: {}\n", logger.filePath());
   }
 
   uint16_t udp_server_port = cmdl.get<int>("udp_port");
@@ -97,17 +88,17 @@ int main(int argc, char *argv[]) {
     Tcp_server tcp_server(io_context, tcp_server_port);
 
 #if ENABLE_WEB_SERVER == 1
-    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &websocket_server](const std::string &msg) {
+    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &websocket_server, &logger](const std::string &msg) {
 #elif ENABLE_WEB_SERVER == 2
-    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &sse_server](const std::string &msg) {
+    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &sse_server, &logger](const std::string &msg) {
 #else
-    Udp_server udp_server(io_context, udp_server_port, [&tcp_server](const std::string &msg) {
+    Udp_server udp_server(io_context, udp_server_port, [&tcp_server, &logger](const std::string &msg) {
 #endif
       if (disp_msg) {
         std::cout << msg << std::flush;
       }
       if (log_msg) {
-        LOG_TRACE(msg);
+        logger.writeRaw(msg.data(), msg.size());
       }
       tcp_server.broadcast_message(msg);
 #if ENABLE_WEB_SERVER == 1
