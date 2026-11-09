@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- WebSocket 变体在 Linux 上无法响应任何请求：`listen(port)` 默认绑定 IPv6 端点，IPv4 客户端被接受为 IPv4 映射连接后，HTTP 页面与 WebSocket 握手响应都写不出去，客户端一直挂起；现改为显式绑定 IPv4，与 TCP、SSE 服务器一致。
+
 ## [V0.8] - 2026-11-09
 
 首个公开发布版本，以 MIT 许可证开源。

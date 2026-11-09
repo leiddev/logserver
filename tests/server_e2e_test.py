@@ -11,6 +11,7 @@ tests in app_log_test.cc; here we only check that a log file appears exactly
 when the log directory is on a temporary file system.
 """
 
+import base64
 import os
 import shutil
 import signal
@@ -71,6 +72,33 @@ def is_tmpfs(path):
     return output.strip() == "tmpfs"
 
 
+def fetch_page(port):
+    """GET / and return the raw response bytes."""
+    http = socket.create_connection(("127.0.0.1", port), timeout=5)
+    http.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    page = recv_until(http, b"</html>", 5)
+    http.close()
+    return page
+
+
+def websocket_handshake(port):
+    """Send a WebSocket upgrade request and return the status line."""
+    key = base64.b64encode(os.urandom(16)).decode()
+    request = (
+        "GET / HTTP/1.1\r\n"
+        "Host: 127.0.0.1:%d\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Key: %s\r\n"
+        "Sec-WebSocket-Version: 13\r\n\r\n" % (port, key)
+    ).encode()
+    conn = socket.create_connection(("127.0.0.1", port), timeout=5)
+    conn.sendall(request)
+    response = recv_until(conn, b"\r\n\r\n", 5)
+    conn.close()
+    return response.split(b"\r\n")[0] if response else b""
+
+
 def main():
     if len(sys.argv) < 2:
         print("usage: server_e2e_test.py <LogServer> [webserver-type]")
@@ -121,13 +149,12 @@ def main():
         forwarded = recv_until(conn, b"e2e", 3)
         check(b"e2e {braces} 100%\n" in forwarded, "UDP payload is fanned out to TCP unchanged")
 
-        if web_type == "SSE":
-            http = socket.create_connection(("127.0.0.1", web_port), timeout=5)
-            http.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-            page = recv_until(http, b"</html>", 5)
-            http.close()
-            check(page.startswith(b"HTTP/1.1 200"), "web server serves the log page at /")
+        if web_type in ("SSE", "WEBSOCKET"):
+            page = fetch_page(web_port)
+            check(page.startswith(b"HTTP/1.1 200") and b"</html>" in page,
+                  "web server serves the log page at /")
 
+        if web_type == "SSE":
             sse = socket.create_connection(("127.0.0.1", web_port), timeout=5)
             sse.sendall(b"GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
             headers = recv_until(sse, b"\r\n\r\n", 5)
@@ -138,10 +165,9 @@ def main():
                   "SSE receives one data: line per log line")
             sse.close()
         elif web_type == "WEBSOCKET":
-            # The WebSocket variant accepts the connection but never answers a
-            # plain HTTP GET, so its log page cannot be fetched. Known
-            # limitation of the WebSocket server, tracked separately.
-            print("SKIP web page check for the WEBSOCKET variant")
+            status = websocket_handshake(web_port)
+            check(status.startswith(b"HTTP/1.1 101"),
+                  "web server completes the WebSocket handshake")
 
         udp.close()
         conn.close()

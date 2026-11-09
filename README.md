@@ -61,9 +61,10 @@ cmake -S . -B build -DWEBSERVER_TYPE=WEBSOCKET
 **WebSocket 服务器使用说明：**
 
 - WebSocket 服务器与 Web 服务器共用相同的端口
+- 访问根路径 `/` 显示日志查看页面
 - WebSocket 连接端点为根路径 `/`，用于接收实时日志推送
 - 支持多客户端并发连接，断开连接后自动清理资源
-- 已知限制：该变体对普通 HTTP `GET /` 请求不作响应，因此日志查看页面无法通过浏览器打开
+- 与 TCP、SSE 服务器一致，监听 IPv4 地址
 
 **SSE 服务器使用说明：**
 
@@ -71,6 +72,7 @@ cmake -S . -B build -DWEBSERVER_TYPE=WEBSOCKET
 - 访问根路径 `/` 显示日志查看页面
 - SSE 连接端点为 `/sse`，用于接收实时日志推送
 - 支持多客户端并发连接，断开连接后自动清理资源
+- 与 TCP、WebSocket 服务器一致，监听 IPv4 地址
 
 ## 使用的第三方库
 

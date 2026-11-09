@@ -83,8 +83,11 @@ class Websocket_server {
   }
 
   void run(uint16_t port) {
-    // listen on specified port
-    m_server.listen(port);
+    // Bind IPv4 explicitly. websocketpp's listen(port) binds an IPv6 endpoint
+    // and accepts IPv4 clients as IPv4-mapped connections; writing the HTTP or
+    // handshake response over those stalls on some Linux hosts, which leaves
+    // the browser hanging. Tcp_server and Sse_server listen on IPv4 as well.
+    m_server.listen(asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port));
 
     // Start the server accept loop
     m_server.start_accept();
