@@ -8,11 +8,17 @@
 
 ## [V0.8] - 2026-11-09
 
+首个公开发布版本，以 MIT 许可证开源。
+
 ### Added
 
 - 新增 `app_log` 模块，自带日志实现：控制台输出、`{}` 占位符格式化、按大小切分的文件归档。
-- 归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.log`。
-- 新增 `.editorconfig`、`.gitattributes`，统一换行符为 LF。
+- 归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.log`；同一毫秒内重复切分会追加三位序号。
+- 新增 MIT `LICENSE` 与 `THIRD_PARTY_NOTICES.md`。
+- 新增 `tests/`：`app_log` 单元测试与 `server_e2e` 端到端测试，通过 CTest 运行。
+- 新增 GitHub Actions CI，在 Linux（gcc）与 Windows（MSVC）上构建并运行测试。
+- 新增 `WEBSERVER_TYPE` CMake 选项（`NONE`/`WEBSOCKET`/`SSE`），无需修改源码即可选择 Web 服务器类型。
+- 新增 `CONTRIBUTING.md`、`CHANGELOG.md`、`.editorconfig`、`.gitattributes`，统一换行符为 LF。
 
 ### Changed
 
@@ -21,6 +27,8 @@
 - 接收到的日志按原始字节写入文件，不再经过格式化，也不添加前缀、时间戳或换行。
 - 文件日志模式下，接收到的日志不再自动输出到控制台，控制台输出完全由 `--disp_msg` 控制。
 - 当前日志文件由 `logserver.txt` 改为 `logserver.log`。
+- `app_log` 编译为独立静态库 `applog`，供测试直接链接。
+- README 重写，补充构建、测试、目录结构与许可证说明。
 
 ### Fixed
 
@@ -30,6 +38,10 @@
 ### Removed
 
 - 移除 `app/inc/utility.hh` 与 `app/src/utility.cc`，其目录处理辅助函数并入 `app_log`。
+
+### Known limitations
+
+- `WEBSOCKET` 变体对普通 HTTP `GET /` 请求不作响应，日志查看页面无法通过浏览器打开。
 
 ## [V0.7] - 2026-09-21
 
@@ -106,3 +118,6 @@
 - 按大小切分日志文件，并可限制保留的文件数量。
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
+
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8...HEAD
+[V0.8]: https://github.com/leiddev/logserver/releases/tag/v0.8
