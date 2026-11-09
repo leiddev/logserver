@@ -6,9 +6,16 @@
 
 ## [Unreleased]
 
+## [V0.8.1] - 2026-11-09
+
 ### Fixed
 
 - WebSocket 变体在 Linux 上无法响应任何请求：`listen(port)` 默认绑定 IPv6 端点，IPv4 客户端被接受为 IPv4 映射连接后，HTTP 页面与 WebSocket 握手响应都写不出去，客户端一直挂起；现改为显式绑定 IPv4，与 TCP、SSE 服务器一致。
+- `WEBSOCKET` 变体的日志查看页面恢复可用。
+
+### Changed
+
+- CI 中三个 `WEBSERVER_TYPE` 变体改为构建并运行完整测试，此前只做构建。
 
 ## [V0.8] - 2026-11-09
 
@@ -123,5 +130,6 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.1...HEAD
+[V0.8.1]: https://github.com/leiddev/logserver/releases/tag/v0.8.1
 [V0.8]: https://github.com/leiddev/logserver/releases/tag/v0.8
