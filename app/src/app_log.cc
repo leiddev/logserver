@@ -249,7 +249,7 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
                       std::size_t max_files) {
   std::lock_guard<std::mutex> lock(mutex_);
 
-  if (max_file_size == 0) {
+  if (max_file_size == 0 || max_files == 0) {
     return false;
   }
   if (!makePath(dir)) {
@@ -257,9 +257,6 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
     return false;
   }
   if (!isTemporaryFs(dir)) {
-    return false;
-  }
-  if (max_files == 0) {
     return false;
   }
 
