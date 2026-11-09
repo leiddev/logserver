@@ -1,0 +1,108 @@
+# Changelog
+
+本文件记录 LogServer 的所有重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
+
+版本号沿用项目既有的 `V0.x` 形式，并非严格遵循语义化版本；破坏性变更会在条目中显式标注。
+
+## [Unreleased]
+
+## [V0.8] - 2026-11-09
+
+### Added
+
+- 新增 `app_log` 模块，自带日志实现：控制台输出、`{}` 占位符格式化、按大小切分的文件归档。
+- 归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.log`。
+- 新增 `.editorconfig`、`.gitattributes`，统一换行符为 LF。
+
+### Changed
+
+- 移除 `bl` 与 `spdlog` 两个第三方依赖。
+- `-s/--max_files` 语义变更：现在限制目录中日志文件的总数（当前文件 + 归档文件），此前为「当前文件 + max_files 个备份」。
+- 接收到的日志按原始字节写入文件，不再经过格式化，也不添加前缀、时间戳或换行。
+- 文件日志模式下，接收到的日志不再自动输出到控制台，控制台输出完全由 `--disp_msg` 控制。
+- 当前日志文件由 `logserver.txt` 改为 `logserver.log`。
+
+### Fixed
+
+- `-s 0` 时不再创建日志目录。
+- 文件写入失败时仅向 stderr 报告并降级为控制台输出，不再中断服务。
+
+### Removed
+
+- 移除 `app/inc/utility.hh` 与 `app/src/utility.cc`，其目录处理辅助函数并入 `app_log`。
+
+## [V0.7] - 2026-09-21
+
+### Added
+
+- 新增 SSE 服务器，作为 WebSocket 之外的前端推送方案，默认启用。
+- 前端支持批量渲染，提升大量日志下的刷新性能。
+- README 补充 WebSocket 与 SSE 服务器文档。
+
+### Changed
+
+- 命令行参数 `-f` 改名为 `-s/--max_files`。
+- `-s/--max_files` 允许设为 `0`，表示不写日志文件。
+- Web 前端页面文件 `log_page.html` 改名为 `ws_log_page.html`。
+
+### Fixed
+
+- SSE 推送多行日志时，为每一行添加 `data:` 前缀。
+
+## [V0.6] - 2025-02-17
+
+### Added
+
+- 新增 `unicode_utility` 库，WebSocket 推送遇到 `invalid_payload` 时将 GB2312 转换为 UTF-8。
+- 显示 WebSocket 错误码，便于定位问题。
+
+### Fixed
+
+- 修正 WebSocket 服务器与日志页面的若干问题。
+
+## [V0.5] - 2025-02-12
+
+### Changed
+
+- TCP 与 UDP 服务器改用 asio 实现。
+- 优化 WebSocket 服务器的消息处理。
+
+### Added
+
+- 新增 `utility.cc` / `utility.hh`，提供目录创建与文件系统类型判断。
+
+### Removed
+
+- 移除 `tcp_server_client` 库及无用代码。
+
+## [V0.4] - 2025-02-10
+
+### Added
+
+- 新增 Web 前端页面，可在浏览器中查看实时日志。
+- 新增 `-w/--web_port` 参数，配置 Web 服务器端口。
+- 新增 WebSocket 服务器，支持多客户端并发连接。
+- 新增 `ENABLE_WEB_SERVER` 编译开关，用于选择 Web 服务器类型。
+
+## [V0.3] - 2024-02-23
+
+### Added
+
+- 支持将日志文件保存到 tmpfs（`/tmp/log/`），避免在嵌入式设备上写 flash。
+- 新增 `Log::setPattern`。
+
+### Fixed
+
+- 修正 TCP 发送超时问题。
+
+## [V0.2 及更早] - 2023-09 ~ 2024-02
+
+此阶段未标记版本号，以下按提交归纳，日期取自各提交时间。
+
+### Added
+
+- 初始版本：通过 UDP 接收日志，通过 TCP 对外提供日志服务。
+- 命令行参数解析、日志级别设置。
+- 按大小切分日志文件，并可限制保留的文件数量。
+- 新增 `LogServer.service`，便于以 systemd 服务方式运行。
+- 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
