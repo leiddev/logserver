@@ -57,7 +57,8 @@ class Logger {
   void setLevel(Level level);
 
   // Enable file logging: <dir>/<base_name>.log is the current file, and every
-  // rotation renames it to <dir>/<base_name>_YYYYMMDD_HHMMSS_mmm.log.
+  // rotation renames it to <dir>/<base_name>_YYYYMMDD_HHMMSS_mmm.log, with a
+  // _NNN index appended when two rotations land in the same millisecond.
   // At most max_files files (current file included) are kept.
   // Returns false when max_files is zero or dir is not on a temporary file
   // system (writing flash on embedded devices should be avoided).
