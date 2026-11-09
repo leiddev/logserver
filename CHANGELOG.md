@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.2] - 2026-11-09
+
 ### Added
 
 - 新增 `-x/--log_suffix` 参数，可在 `txt` 与 `log` 之间选择日志文件后缀，只接受这两个值，默认 `txt`。
@@ -140,6 +142,7 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.2...HEAD
+[V0.8.2]: https://github.com/leiddev/logserver/releases/tag/v0.8.2
 [V0.8.1]: https://github.com/leiddev/logserver/releases/tag/v0.8.1
 [V0.8]: https://github.com/leiddev/logserver/releases/tag/v0.8
