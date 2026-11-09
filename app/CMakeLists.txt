@@ -7,9 +7,6 @@ message(STATUS "PROJECT_NAME = " ${PROJECT_NAME})
 # 导出Clang需要的文件，用于智能提示和基于语议的补全
 SET(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
-# spdlog库头文件优化
-add_definitions(-DSPDLOG_COMPILED_LIB)
-
 # 设置操作系统相关
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     add_definitions(-DWIN32_LEAN_AND_MEAN)
@@ -39,8 +36,6 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 # 链接库文件
 target_link_libraries(
     ${PROJECT_NAME}
-    bl
-    spdlog
     unicode_utility
     cmdline
     websocketpp
