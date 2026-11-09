@@ -6,3 +6,4 @@ out/
 *.tgz
 .vscode/
 .claude/
+log/
