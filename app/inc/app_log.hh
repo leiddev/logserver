@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /*
  * Leid 2026.11
  */

@@ -1,4 +1,5 @@
-﻿/*
+// SPDX-License-Identifier: MIT
+/*
  * Leid 2025.2
  */
 #pragma once
