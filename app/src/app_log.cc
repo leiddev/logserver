@@ -54,6 +54,12 @@ bool pathExists(const std::string &path) {
   return true;
 }
 
+// File logging is not usable while initFile runs (it holds the logger mutex and
+// no file is open yet), so failures there are reported on stderr directly.
+void reportDisabled(const char *file, int line, const std::string &message) {
+  std::fprintf(stderr, "[APP] [%s:%d] file logging disabled: %s\n", file, line, message.c_str());
+}
+
 #ifdef _WIN32
 
 // Create the directory and all of its parents, like "mkdir -p".
@@ -78,23 +84,32 @@ bool makePath(const std::string &path) {
 
     int length = ::MultiByteToWideChar(CP_ACP, 0, dir.c_str(), -1, nullptr, 0);
     if (length <= 0) {
+      reportDisabled(__FILE__, __LINE__, "cannot convert path to wide chars: " + dir);
       return false;
     }
     std::vector<wchar_t> wide(static_cast<std::size_t>(length));
     ::MultiByteToWideChar(CP_ACP, 0, dir.c_str(), -1, wide.data(), length);
 
     DWORD attributes = ::GetFileAttributesW(wide.data());
-    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-      continue;
+    if (attributes != INVALID_FILE_ATTRIBUTES) {
+      if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        continue;
+      }
+      reportDisabled(__FILE__, __LINE__, dir + " exists but is not a directory");
+      return false;
     }
     if (::CreateDirectoryW(wide.data(), nullptr) == 0) {
+      char buffer[64] = {0};
+      std::snprintf(buffer, sizeof(buffer), "error %lu", static_cast<unsigned long>(::GetLastError()));
+      reportDisabled(__FILE__, __LINE__, "cannot create directory " + dir + ": " + buffer);
       return false;
     }
   }
   return true;
 }
 
-bool isTemporaryFs(const std::string & /*path*/) {
+// Windows has no tmpfs, so file logging is always allowed here.
+bool checkTemporaryFs(const std::string & /*path*/) {
   return true;
 }
 
@@ -135,20 +150,42 @@ bool makePath(const std::string &path) {
     if (dir.empty()) {
       continue;
     }
-    if (::mkdir(dir.c_str(), 0777) != 0 && errno != EEXIST) {
+    if (::mkdir(dir.c_str(), 0777) != 0) {
+      if (errno == EEXIST) {
+        struct stat info;
+        if (::stat(dir.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) {
+          continue;
+        }
+        reportDisabled(__FILE__, __LINE__, dir + " exists but is not a directory");
+        return false;
+      }
+      int error = errno;
+      reportDisabled(__FILE__, __LINE__, "cannot create directory " + dir + ": " + std::strerror(error));
       return false;
     }
   }
   return true;
 }
 
-bool isTemporaryFs(const std::string &path) {
+// File logging is only allowed on a temporary file system, so that embedded
+// devices do not wear out their flash. Reports the reason when it is not.
+bool checkTemporaryFs(const std::string &path) {
   struct statfs fs_info;
   std::memset(&fs_info, 0, sizeof(fs_info));
   if (::statfs(path.c_str(), &fs_info) != 0) {
+    int error = errno;
+    reportDisabled(__FILE__, __LINE__, "cannot stat " + path + ": " + std::strerror(error));
     return false;
   }
-  return fs_info.f_type == TMPFS_MAGIC;
+  if (fs_info.f_type != TMPFS_MAGIC) {
+    char buffer[32] = {0};
+    std::snprintf(buffer, sizeof(buffer), "0x%lx", static_cast<unsigned long>(fs_info.f_type));
+    reportDisabled(__FILE__, __LINE__,
+                   path + " is not on tmpfs (file system type " + buffer +
+                       "); point the log directory at a tmpfs or use -s 0");
+    return false;
+  }
+  return true;
 }
 
 std::vector<std::string> listDir(const std::string &dir) {
@@ -250,15 +287,20 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
                       std::size_t max_files) {
   std::lock_guard<std::mutex> lock(mutex_);
 
-  if (max_file_size == 0 || max_files == 0) {
+  // max_files == 0 means the caller does not want file logging at all (-s 0),
+  // which is not a failure: stay silent and leave the file system untouched.
+  if (max_files == 0) {
+    return false;
+  }
+  if (max_file_size == 0) {
+    reportDisabled(__FILE__, __LINE__, "max_file_size is zero");
     return false;
   }
   if (!makePath(dir)) {
-    std::fprintf(stderr, "[APP] [%s:%d] failed to create log directory: %s\n", __FILE__, __LINE__, dir.c_str());
-    return false;
+    return false;  // makePath reported the reason
   }
-  if (!isTemporaryFs(dir)) {
-    return false;
+  if (!checkTemporaryFs(dir)) {
+    return false;  // checkTemporaryFs reported the reason
   }
 
   closeFileLocked();

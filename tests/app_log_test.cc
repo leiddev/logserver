@@ -252,6 +252,30 @@ TEST_CASE("initFile rejects max_file_size == 0") {
   CHECK(listFiles(dir).empty());
 }
 
+TEST_CASE("initFile rejects a path that exists as a regular file") {
+  const std::string root = testRoot();
+  const std::string path = root + "not_a_dir";
+  makeDir(root);
+  std::remove(path.c_str());
+
+  std::FILE *file = std::fopen(path.c_str(), "wb");
+  CHECK(file != nullptr);
+  if (file) {
+    std::fwrite("x", 1, 1, file);
+    std::fclose(file);
+  }
+
+  applog::Logger &logger = applog::Logger::instance();
+  CHECK(!logger.initFile(path + kPathSeparator, "logserver", 1024, 5));
+
+  // The existing file must be left alone.
+  std::string content;
+  CHECK(readFile(path, &content));
+  CHECK_EQ(std::string("x"), content);
+
+  std::remove(path.c_str());
+}
+
 TEST_CASE("raw writes are neither formatted nor terminated") {
   const std::string dir = prepareDir("raw_write");
   applog::Logger &logger = applog::Logger::instance();
