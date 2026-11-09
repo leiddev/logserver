@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build and test on ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64 (gcc)
+            os: ubuntu-latest
+            extra: ""
+          - name: Windows x64 (MSVC)
+            os: windows-latest
+            extra: "-A x64"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build ${{ matrix.extra }} -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DEXAMPLE=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  webserver-variants:
+    name: Build webserver variant ${{ matrix.type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        type: [NONE, WEBSOCKET, SSE]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DEXAMPLE=OFF -DWEBSERVER_TYPE=${{ matrix.type }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Smoke run
+        working-directory: build/out/app
+        run: ./LogServer --help
