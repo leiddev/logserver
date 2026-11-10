@@ -19,6 +19,7 @@ import os
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -93,6 +94,15 @@ def fetch_page(port):
 
 def websocket_handshake(port):
     """Send a WebSocket upgrade request and return the status line."""
+    conn = websocket_connect(port)
+    if conn is None:
+        return b""
+    conn.close()
+    return b"HTTP/1.1 101 Switching Protocols"
+
+
+def websocket_connect(port):
+    """Upgrade to WebSocket and return the still open socket, or None."""
     key = base64.b64encode(os.urandom(16)).decode()
     request = (
         "GET / HTTP/1.1\r\n"
@@ -105,8 +115,40 @@ def websocket_handshake(port):
     conn = socket.create_connection(("127.0.0.1", port), timeout=5)
     conn.sendall(request)
     response = recv_until(conn, b"\r\n\r\n", 5)
-    conn.close()
-    return response.split(b"\r\n")[0] if response else b""
+    if not response.startswith(b"HTTP/1.1 101"):
+        conn.close()
+        return None
+    return conn
+
+
+def read_ws_frame(conn, timeout=5):
+    """Read one server-to-client frame and return its payload, or None."""
+    conn.settimeout(timeout)
+
+    def exact(n):
+        buf = b""
+        while len(buf) < n:
+            chunk = conn.recv(n - len(buf))
+            if not chunk:
+                return None
+            buf += chunk
+        return buf
+
+    header = exact(2)
+    if header is None:
+        return None
+    length = header[1] & 0x7F
+    if length == 126:
+        extra = exact(2)
+        if extra is None:
+            return None
+        length = struct.unpack(">H", extra)[0]
+    elif length == 127:
+        extra = exact(8)
+        if extra is None:
+            return None
+        length = struct.unpack(">Q", extra)[0]
+    return exact(length) if length else b""
 
 
 def main():
@@ -197,6 +239,34 @@ def main():
             status = websocket_handshake(web_port)
             check(status.startswith(b"HTTP/1.1 101"),
                   "web server completes the WebSocket handshake")
+
+            # A connected browser must receive every log line, whatever
+            # encoding it arrives in. A text frame also has to be valid UTF-8.
+            ws = websocket_connect(web_port)
+            check(ws is not None, "WebSocket client connects for the payload checks")
+            if ws is not None:
+                # The server registers a new client through a queue, so give the
+                # processing thread a moment before the first broadcast.
+                time.sleep(0.3)
+                udp.sendto(GB2312_CHINESE + b"\n", ("127.0.0.1", udp_port))
+                frame = read_ws_frame(ws)
+                check(frame is not None and GB2312_CHINESE_UTF8 in frame,
+                      "WebSocket converts a GB2312 line to UTF-8")
+
+                udp.sendto(INVALID_UTF8 + b"\n", ("127.0.0.1", udp_port))
+                frame = read_ws_frame(ws)
+                check(frame is not None and frame != b"",
+                      "WebSocket delivers a line with undecodable bytes")
+                if frame:
+                    try:
+                        frame.decode("utf-8")
+                        decodes = True
+                    except UnicodeDecodeError:
+                        decodes = False
+                    check(decodes, "WebSocket payload is valid UTF-8")
+                    check(REPLACEMENT in frame,
+                          "undecodable bytes are replaced with U+FFFD")
+                ws.close()
 
         udp.close()
         conn.close()

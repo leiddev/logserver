@@ -29,9 +29,9 @@
 #include <iostream>
 #include <set>
 
-#include <gbcodec/gbcodec.hpp>
 #include "common.h"
 #include "html_page.hh"
+#include "text_encoding.hh"
 
 typedef websocketpp::server<websocketpp::config::asio> websocketserver;
 
@@ -260,29 +260,15 @@ class Websocket_server {
         }
       } else if (a.type == BROADCAST) {
         lock_guard<mutex> guard(m_connection_lock);
+        // A text frame must be valid UTF-8, so convert once for all clients.
+        // toDisplayUtf8 never fails, which is what keeps a malformed line from
+        // silently disappearing the way the old GB2312 retry did.
+        const std::string body = textenc::toDisplayUtf8(a.str);
         for (auto& hdl : m_connections) {
           try {
-            m_server.send(hdl, a.str, websocketpp::frame::opcode::text);
+            m_server.send(hdl, body, websocketpp::frame::opcode::text);
           } catch (websocketpp::exception const& e) {
-            if (e.code().value() == websocketpp::processor::error::invalid_payload) {
-              // The payload is not valid UTF-8, which a text frame requires.
-              // Producers on this platform log in GB2312, so convert and retry.
-              // Keep the original bytes if the conversion itself fails.
-              const std::string no_utf8_str = a.str;
-              std::string utf8_str = no_utf8_str;
-              try {
-                utf8_str = gbcodec::from_gb2312(no_utf8_str, U'\uFFFD');
-              } catch (const gbcodec::error &conversion_error) {
-                LOG_ERR("GB2312 conversion failed: {}\n", conversion_error.what());
-              }
-              try {
-                m_server.send(hdl, utf8_str, websocketpp::frame::opcode::text);
-              } catch (websocketpp::exception const& e) {
-                LOG_ERR("Websocket client exception again: {} {}\n", e.code().value(), e.what());
-              }
-            } else {
-              LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
-            }
+            LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
           }
         }
       }
