@@ -133,9 +133,12 @@ class Server(object):
         return sock
 
     def tcp_connect(self):
+        """Connect a log consumer; None when the welcome banner is overdue."""
         sock = socket.create_connection(("127.0.0.1", self.tcp_port), timeout=5)
         self.track(sock)
-        recv_until(sock, b"Welcome", 3)
+        if b"Welcome" not in recv_until(sock, b"Welcome", 3):
+            sock.close()
+            return None
         return sock
 
     def ws_connect(self):
@@ -301,11 +304,10 @@ def check_sse_stalled_consumer(ctx):
 
     A client that never reads fills its send buffer, then its queue. It has to
     be dropped on its own, on the io_context thread, while the thread that
-    receives the datagrams keeps the TCP fan-out moving.
+    receives the datagrams keeps accepting clients and fanning logs out.
     """
     stalled = ctx.server.sse_connect(rcvbuf=2048)
     sse_headers_ok(ctx, stalled, "stalled SSE client")
-    tcp = ctx.server.tcp_connect()
 
     # 320 events of 60 KB: the kernel buffers take a few megabytes, the rest
     # piles up in the client's queue until the 4 MB limit drops it.
@@ -316,10 +318,17 @@ def check_sse_stalled_consumer(ctx):
         time.sleep(0.0002)
     time.sleep(0.3)
 
-    tcp.sendall(b"ECHO-PING\n")
-    echo = recv_until(tcp, b"ECHO-PING", 2.0)
-    ctx.check(b"ECHO-PING" in echo,
-              "a stalled SSE client does not stall the IO thread (TCP echo within 2s)")
+    # A consumer that connects after the flood has none of it queued ahead of
+    # its own data, so its answer measures the IO thread and nothing else.
+    probe = ctx.server.tcp_connect()
+    ctx.check(probe is not None, "a TCP client is accepted while the stalled stream is blocked")
+    if probe is not None:
+        ctx.server.send_log(b"AFTER-FLOOD\n")
+        data = recv_until(probe, b"AFTER-FLOOD", 2.0)
+        ctx.check(b"AFTER-FLOOD" in data,
+                  "a stalled SSE client does not stall the IO thread "
+                  "(UDP reception and the TCP fan-out answer within 2s)")
+        probe.close()
 
     evicted = stalled_closed(stalled, 10.0)
     ctx.check(evicted, "the server drops the SSE client that stopped reading")
@@ -333,7 +342,6 @@ def check_sse_stalled_consumer(ctx):
     ctx.check(b"data: AFTER-EVICTION\n" in data,
               "a new SSE client is served after the stalled one was dropped")
     fresh.close()
-    tcp.close()
 
 
 def stalled_closed(sock, timeout):
