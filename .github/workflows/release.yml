@@ -17,11 +17,20 @@ jobs:
   build-linux:
     name: Linux x64
     runs-on: ubuntu-latest
+    # Built on glibc 2.28 with a static libstdc++, so the binary also runs on
+    # older distributions. A binary built on ubuntu-latest needs glibc 2.34+
+    # and fails to start on, for example, Kylin V10 or Debian 11.
+    container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DEXAMPLE=OFF
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DEXAMPLE=OFF
+          -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
 
       - name: Build
         run: cmake --build build --parallel
