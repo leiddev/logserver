@@ -55,9 +55,8 @@ jobs:
         run: ./LogServer --help
 
   thread-sanitizer:
-    # Reproduces the data race on Websocket_server::m_connections. This job is
-    # expected to fail until broadcast_message() stops reading the subscriber
-    # set without m_connection_lock.
+    # Guards against the data race on Websocket_server's subscriber set, which
+    # a normal build cannot detect.
     name: WebSocket broadcast race (ThreadSanitizer)
     runs-on: ubuntu-latest
     steps:

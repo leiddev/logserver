@@ -11,17 +11,17 @@ Usage: web_frontend_test.py <path-to-LogServer> <SSE|WEBSOCKET>
 The functional checks (fan-out, encodings, page) live in server_e2e_test.py.
 This file attacks the parts that only show up over time or under load:
 
-  * a client of the event stream that stops reading must not stop the UDP/TCP
-    fan-out (the SSE front end writes to the sockets on the receiving thread);
+  * a client of the event stream that stops reading must neither stall the
+    UDP/TCP fan-out nor keep the server from dropping it;
+  * every event arrives whole and in order, heartbeats included;
   * several clients get every event, and one going away does not disturb the
     others;
-  * a large line arrives as one intact event;
   * malformed HTTP requests get 400 and the server keeps serving;
   * WebSocket clients get every broadcast, text frames are echoed, and
     connecting/disconnecting during a flood does not take the server down.
 
-A check that fails here is meant to fail: this file exists to reproduce the
-defects it describes, not to paper over them.
+The slow-consumer and event-integrity checks failed against V0.8.6 and guard
+the fixes made since; the rest cover behaviour that must not regress.
 """
 
 import base64
@@ -68,24 +68,6 @@ def recv_until(sock, expected, timeout):
         if expected in data:
             break
     return data
-
-
-def drain(sock, quiet=0.5, limit=15.0):
-    """Read until the peer has been silent for `quiet` seconds."""
-    total = 0
-    deadline = time.time() + limit
-    sock.settimeout(quiet)
-    while time.time() < deadline:
-        try:
-            chunk = sock.recv(65536)
-        except socket.timeout:
-            break
-        except OSError:
-            break
-        if not chunk:
-            break
-        total += len(chunk)
-    return total
 
 
 def http_get(port, path="/"):
@@ -303,41 +285,93 @@ def check_sse_fanout(ctx):
         sock.close()
 
 
+def sse_payloads(data):
+    """Split an event stream into the payload of each data: block, heartbeats aside."""
+    payloads = []
+    for block in data.split(b"\n\n"):
+        lines = [line[len(b"data: "):] for line in block.split(b"\n") if line.startswith(b"data: ")]
+        if not lines or lines == [b"[heartbeat]"]:
+            continue
+        payloads.append(b"\n".join(lines))
+    return payloads
+
+
 def check_sse_stalled_consumer(ctx):
     """A browser that stops reading must not stall the UDP/TCP fan-out.
 
-    The SSE server writes to its clients with a blocking write on the thread
-    that receives the UDP datagrams. Once the client's receive window and the
-    server's send buffer are full, that thread is stuck in send() and the TCP
-    fan-out, UDP reception and signal handling all stop with it.
+    A client that never reads fills its send buffer, then its queue. It has to
+    be dropped on its own, on the io_context thread, while the thread that
+    receives the datagrams keeps the TCP fan-out moving.
     """
     stalled = ctx.server.sse_connect(rcvbuf=2048)
     sse_headers_ok(ctx, stalled, "stalled SSE client")
     tcp = ctx.server.tcp_connect()
 
-    # 200 events of 32 KB: more than a socket send buffer (4 MB at most) can
-    # hold, so the server necessarily blocks on this client.
-    for index in range(200):
+    # 320 events of 60 KB: the kernel buffers take a few megabytes, the rest
+    # piles up in the client's queue until the 4 MB limit drops it.
+    for index in range(320):
         body = b"STALL-%03d " % index
-        body += b"x" * (32000 - len(body))
+        body += b"x" * (60000 - len(body))
         ctx.server.send_log(body + b"\n")
-        time.sleep(0.001)
+        time.sleep(0.0002)
     time.sleep(0.3)
 
     tcp.sendall(b"ECHO-PING\n")
     echo = recv_until(tcp, b"ECHO-PING", 2.0)
-    responsive = b"ECHO-PING" in echo
-    ctx.check(responsive,
-              "a stalled SSE client does not stall the IO thread "
-              "(TCP echo within 2s while the stream is blocked)")
+    ctx.check(b"ECHO-PING" in echo,
+              "a stalled SSE client does not stall the IO thread (TCP echo within 2s)")
 
-    drain(stalled, quiet=0.5)
-    stalled.close()
-    if not responsive:
-        echo = recv_until(tcp, b"ECHO-PING", 5.0)
-        ctx.check(b"ECHO-PING" in echo,
-                  "the IO thread recovers once the stalled SSE client is drained")
+    evicted = stalled_closed(stalled, 10.0)
+    ctx.check(evicted, "the server drops the SSE client that stopped reading")
+    ctx.check(ctx.server.alive(), "the server survives a stalled SSE client")
+
+    # The stream keeps working for the next client.
+    fresh = ctx.server.sse_connect()
+    sse_headers_ok(ctx, fresh, "SSE client after the eviction")
+    ctx.server.send_log(b"AFTER-EVICTION\n")
+    data = recv_until(fresh, b"data: AFTER-EVICTION", 5)
+    ctx.check(b"data: AFTER-EVICTION\n" in data,
+              "a new SSE client is served after the stalled one was dropped")
+    fresh.close()
     tcp.close()
+
+
+def stalled_closed(sock, timeout):
+    """Drain a client until the server closes its side, then report whether it did."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        sock.settimeout(min(0.5, max(0.01, deadline - time.time())))
+        try:
+            chunk = sock.recv(65536)
+        except socket.timeout:
+            continue
+        except OSError:
+            return True  # reset by the server
+        if not chunk:
+            return True  # orderly close
+    return False
+
+
+def check_sse_event_integrity(ctx):
+    """Every event arrives whole and in order, with no bytes lost or spliced."""
+    sock = ctx.server.sse_connect()
+    sse_headers_ok(ctx, sock, "SSE ordered stream")
+
+    bodies = []
+    for index in range(64):
+        body = b"SEQ-%03d " % index
+        body += b"y" * (4096 - len(body))
+        bodies.append(body)
+        ctx.server.send_log(body + b"\n")
+        time.sleep(0.002)
+
+    data = recv_until(sock, b"data: " + bodies[-1] + b"\n", 15)
+    payloads = sse_payloads(data)
+    ctx.check(payloads == bodies,
+              "64 events arrive complete and in order (%d of %d payloads)"
+              % (len(payloads), len(bodies)))
+    ctx.check(b"\x00" not in data, "the event stream carries no NUL byte")
+    sock.close()
 
 
 def check_sse_abrupt_disconnect(ctx):
@@ -519,6 +553,7 @@ def main():
         if web_type == "SSE":
             check_sse_fanout(ctx)
             check_sse_stalled_consumer(ctx)
+            check_sse_event_integrity(ctx)
             check_sse_abrupt_disconnect(ctx)
             check_sse_large_line(ctx)
             check_sse_malformed_requests(ctx)

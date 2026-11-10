@@ -2,22 +2,24 @@
 /*
  * Leid 2026.11
  *
- * Reproducer for the data race on Websocket_server::m_connections.
+ * Regression test for the broadcast path of Websocket_server.
  *
- * broadcast_message() reads m_connections.size() from the UDP thread without
- * taking m_connection_lock, while process_messages() inserts the handles of
- * new clients and erases the handles of gone ones under that lock. Two threads
- * touching a std::set that way is undefined behaviour; ThreadSanitizer shows
- * it as a race between the size() read and _M_insert_unique()/_M_erase().
+ * broadcast_message() used to read m_connections.size() from the UDP thread
+ * without taking m_connection_lock, while process_messages() inserted the
+ * handles of new clients and erased the handles of gone ones under that lock.
+ * Two threads touching a std::set that way is undefined behaviour, and
+ * ThreadSanitizer reported the size() read against the insert/erase.
  *
- * This binary must be built with ThreadSanitizer:
+ * The subscriber set is now only touched on the processing thread, so the
+ * race must not come back. The test keeps many broadcasts and many
+ * subscribe/unsubscribe cycles running against each other and lets
+ * ThreadSanitizer decide.
+ *
+ * It must be built with ThreadSanitizer:
  *
  *   cmake -S . -B build -DWEBSERVER_TYPE=WEBSOCKET -DLOG_SERVER_TSAN_TESTS=ON
  *   cmake --build build --target websocket_broadcast_race_test
  *   ctest --test-dir build -R websocket_broadcast_race --output-on-failure
- *
- * On the current code the report points at websocket_server.hh (the
- * m_connections.size() read) and the process exits with status 66.
  */
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)

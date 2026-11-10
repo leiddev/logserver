@@ -15,17 +15,17 @@ add_test(NAME text_encoding COMMAND text_encoding_test)
 
 find_package(Threads REQUIRED)
 
-# Shutdown reproducer: stop() must not leave process_messages() waiting when
-# the endpoint never started listening.
+# Shutdown guard: stop() must not leave process_messages() waiting when the
+# endpoint never started listening.
 add_executable(websocket_stop_test websocket_stop_test.cc ../app/src/html_page.cc)
 target_link_libraries(websocket_stop_test PRIVATE applog apptext websocketpp asio Threads::Threads)
 add_test(NAME websocket_stop COMMAND websocket_stop_test)
 set_tests_properties(websocket_stop PROPERTIES TIMEOUT 60)
 
-# Reproducer for the m_connections data race. It only reports anything under
-# ThreadSanitizer, so it is built with the flag explicitly and kept behind an
-# option: a sanitizer runtime does not belong in a normal release build.
-option(LOG_SERVER_TSAN_TESTS "Build the ThreadSanitizer WebSocket race reproducer" OFF)
+# Guard against the m_connections data race coming back. Only ThreadSanitizer
+# can see it, so the binary is built with the flag explicitly and kept behind
+# an option: a sanitizer runtime does not belong in a normal release build.
+option(LOG_SERVER_TSAN_TESTS "Build the ThreadSanitizer WebSocket race test" OFF)
 if(LOG_SERVER_TSAN_TESTS)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_executable(websocket_broadcast_race_test
@@ -53,9 +53,8 @@ if(Python3_Interpreter_FOUND)
     )
     set_tests_properties(server_e2e PROPERTIES TIMEOUT 60)
 
-    # Stability, robustness and availability checks for the web front ends.
-    # The script is a reproducer suite: the checks it contains are expected to
-    # fail while the defects they describe are present.
+    # Stability, robustness and availability checks for the web front ends:
+    # slow consumers, event integrity, disconnects and client churn.
     if(NOT WEBSERVER_TYPE STREQUAL "NONE")
         add_test(
             NAME web_frontend
