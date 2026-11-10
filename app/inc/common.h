@@ -4,7 +4,7 @@
 
 #include "app_log.hh"
 
-#define APP_VERSION_STR      "V0.8.2"
+#define APP_VERSION_STR      "V0.8.3"
 
 #define LOG_TRACE(...) applog::Logger::instance().writef(applog::kTrace, __VA_ARGS__)
 #define LOG_DEBUG(...) applog::Logger::instance().writef(applog::kDebug, "[APP] " __VA_ARGS__)

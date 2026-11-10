@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.3] - 2026-11-09
+
 ### Fixed
 
 - 运行期间日志文件被外部删除、改名或所在目录被删除时，进程此前会继续写入不可见的 inode，目录里看不到任何文件，直到触发 1MB 切分才恢复；现在会检测到并在最多 32 条日志或 1 秒内重建文件（目录一并重建），向 stderr 留一行提示。
@@ -147,7 +149,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.3...HEAD
+[V0.8.3]: https://github.com/leiddev/logserver/releases/tag/v0.8.3
 [V0.8.2]: https://github.com/leiddev/logserver/releases/tag/v0.8.2
 [V0.8.1]: https://github.com/leiddev/logserver/releases/tag/v0.8.1
 [V0.8]: https://github.com/leiddev/logserver/releases/tag/v0.8
