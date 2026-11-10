@@ -6,9 +6,19 @@
 
 ## [Unreleased]
 
+## [V0.8.6] - 2026-11-10
+
+### Fixed
+
+- SSE 模式此前把原始字节直接写入事件流，GB2312 日志在浏览器里显示为乱码（EventSource 一律按 UTF-8 解码）。现在与 WebSocket 一样先转成 UTF-8。
+- WebSocket 遇到既非合法 UTF-8、也非合法 GB2312 的日志时，旧库返回空串，整条日志静默丢失。现在无法解码的字节替换为 U+FFFD，日志行不再消失。
+- 旧库 `unicode_utility` 在有损转换失败时把 `-1` 存入无符号变量，32 位平台上越界检查回绕，`memcpy` 收到负长度：**单个畸形 UDP 报文即可使 32 位构建的进程崩溃**。替换库后该路径不再存在。
+- SSE 响应头把结尾的 NUL 一并写出，首个事件字段变成 `"\0data"`，被 EventSource 忽略，第一次心跳丢失。
+- SSE 与页面响应此前未声明字符集，现在 `Content-Type` 带 `charset=utf-8`。
+
 ### Changed
 
-- 第三方库 `unicode_utility` 替换为 `gbcodec` 1.2.1。旧库在转换失败时返回空串，且在 32 位平台存在越界写入（单个畸形报文即可使进程崩溃）；新库提供带错误码的有损转换接口，无法映射的字符由调用者指定码点替代。
+- 第三方库 `unicode_utility` 替换为 `gbcodec` 1.2.1，带错误码与调用者指定码点的有损转换接口。
 - 构建最低 CMake 版本由 3.10 提升到 3.15（gbcodec 的要求）。
 - 未指定 `CMAKE_BUILD_TYPE` 时默认使用 `Release`，此前是空值（等于无优化）。
 
@@ -171,7 +181,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.5...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.6...HEAD
+[V0.8.6]: https://github.com/leiddev/logserver/releases/tag/v0.8.6
 [V0.8.5]: https://github.com/leiddev/logserver/releases/tag/v0.8.5
 [V0.8.4]: https://github.com/leiddev/logserver/releases/tag/v0.8.4
 [V0.8.3]: https://github.com/leiddev/logserver/releases/tag/v0.8.3
