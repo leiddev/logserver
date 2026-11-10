@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [V0.8.5] - 2026-11-10
+
+### Added
+
+- 启动时输出 Web 服务器类型与端口：`Web server: SSE mode on port N`、`Web server: WebSocket mode on port N`，未启用 Web 服务器时输出 `Web server: disabled`。
+
+### Changed
+
+- 源文件、头文件、测试与内嵌页面的注释统一为英文，每个文件补上说明用途的文件头注释；页面文案、日志内容与文档的中文保持不变。
+
 ## [V0.8.4] - 2026-11-10
 
 ### Fixed
@@ -155,7 +165,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.5...HEAD
+[V0.8.5]: https://github.com/leiddev/logserver/releases/tag/v0.8.5
 [V0.8.4]: https://github.com/leiddev/logserver/releases/tag/v0.8.4
 [V0.8.3]: https://github.com/leiddev/logserver/releases/tag/v0.8.3
 [V0.8.2]: https://github.com/leiddev/logserver/releases/tag/v0.8.2
