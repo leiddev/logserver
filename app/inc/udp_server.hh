@@ -16,6 +16,7 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "common.h"
 
@@ -27,7 +28,9 @@ class Udp_server {
  public:
   Udp_server(asio::io_context& io_context, unsigned short udp_port,
              std::function<void(const std::string&)> broadcast_cb)
-      : socket_(io_context, asio::ip::udp::endpoint(asio::ip::udp::v4(), udp_port)), broadcast_cb_(broadcast_cb) {
+      : socket_(io_context, asio::ip::udp::endpoint(asio::ip::udp::v4(), udp_port)),
+        data_(kMaxDatagramSize),
+        broadcast_cb_(broadcast_cb) {
     start_receive();
   }
 
@@ -40,12 +43,22 @@ class Udp_server {
   }
 
  private:
+  // A UDP datagram that does not fit in the receive buffer is truncated by the
+  // kernel and the rest is discarded without any error, so the buffer has to
+  // cover the largest payload possible: 65507 bytes for IPv4. Buffers on the
+  // heap, not on the stack, because the server lives in main().
+  enum { kMaxDatagramSize = 65536 };
+
   void start_receive() {
-    socket_.async_receive_from(asio::buffer(data_, max_length), remote_endpoint_,
+    socket_.async_receive_from(asio::buffer(data_), remote_endpoint_,
                                [this](std::error_code ec, std::size_t bytes_recvd) {
                                  if (!ec && bytes_recvd > 0) {
-                                   std::string message(data_, bytes_recvd);
-                                   //LOG_INFO("Received UDP message({}): {}\n", message.size(), message);
+                                   if (bytes_recvd == data_.size()) {
+                                     LOG_ERR("UDP datagram of {} bytes fills the receive buffer, it may be "
+                                             "truncated\n",
+                                             bytes_recvd);
+                                   }
+                                   std::string message(data_.data(), bytes_recvd);
                                    // 转发UDP消息给所有TCP客户端
                                    if (broadcast_cb_) {
                                      broadcast_cb_(message);
@@ -59,8 +72,7 @@ class Udp_server {
 
   asio::ip::udp::socket socket_;
   asio::ip::udp::endpoint remote_endpoint_;
-  enum { max_length = 1024 };
-  char data_[max_length];
+  std::vector<char> data_;
   std::function<void(const std::string&)> broadcast_cb_;
 };
 

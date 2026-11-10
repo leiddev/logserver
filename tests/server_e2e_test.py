@@ -149,6 +149,13 @@ def main():
         forwarded = recv_until(conn, b"e2e", 3)
         check(b"e2e {braces} 100%\n" in forwarded, "UDP payload is fanned out to TCP unchanged")
 
+        # A datagram larger than the old 1024 byte buffer must arrive whole.
+        long_payload = b"LONG[" + (b"0123456789" * 400) + b"]END\n"  # 4006 bytes
+        udp.sendto(long_payload, ("127.0.0.1", udp_port))
+        long_forwarded = recv_until(conn, b"]END", 5)
+        check(long_payload in long_forwarded,
+              "a %d byte datagram is forwarded whole, not truncated" % len(long_payload))
+
         if web_type in ("SSE", "WEBSOCKET"):
             page = fetch_page(web_port)
             check(page.startswith(b"HTTP/1.1 200") and b"</html>" in page,
