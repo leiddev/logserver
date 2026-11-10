@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.7] - 2026-11-10
+
 ### Fixed
 
 - SSE 向浏览器推送时在 UDP 接收线程上做阻塞写：一个不读数据的浏览器把发送缓冲填满后，UDP 接收、TCP 转发与日志落盘全部停住，SIGINT 也无法处理。现在每个客户端有独立的发送队列，写入只在 SSE 自己的 io_context 线程进行；某个客户端累计积压超过 4 MB 视为掉线并被关闭，其余客户端不受影响。
@@ -195,7 +197,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.6...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.7...HEAD
+[V0.8.7]: https://github.com/leiddev/logserver/releases/tag/v0.8.7
 [V0.8.6]: https://github.com/leiddev/logserver/releases/tag/v0.8.6
 [V0.8.5]: https://github.com/leiddev/logserver/releases/tag/v0.8.5
 [V0.8.4]: https://github.com/leiddev/logserver/releases/tag/v0.8.4

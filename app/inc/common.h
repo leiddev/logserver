@@ -11,7 +11,7 @@
 
 #include "app_log.hh"
 
-#define APP_VERSION_STR      "V0.8.6"
+#define APP_VERSION_STR      "V0.8.7"
 
 // Internal messages carry the [APP] prefix so they can be told apart from the
 // logs received over UDP when both end up in the same file.
