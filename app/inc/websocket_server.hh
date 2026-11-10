@@ -26,6 +26,8 @@
 #include <websocketpp/server.hpp>
 
 #include <functional>
+#include <atomic>
+#include <cstddef>
 #include <iostream>
 #include <set>
 
@@ -98,6 +100,10 @@ class Websocket_server {
     // the browser hanging. Tcp_server and Sse_server listen on IPv4 as well.
     m_server.listen(asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port));
 
+    // Published here, read from the UDP thread through is_listening(); the
+    // endpoint's own state must not be touched from outside its IO thread.
+    m_listening.store(true);
+
     // Start the server accept loop
     m_server.start_accept();
 
@@ -125,9 +131,12 @@ class Websocket_server {
     m_action_cond.notify_one();
   }
 
-  // Queue one log line for every subscriber.
+  // Queue one log line for every subscriber. The subscriber set belongs to
+  // the processing thread, so it must not be looked at here; the count is
+  // published separately to keep the common "nobody is watching" case from
+  // waking the processing thread for every log line.
   void broadcast_message(const std::string& message) {
-    if (m_connections.size() == 0) {
+    if (m_subscriber_count.load(std::memory_order_relaxed) == 0) {
       return;
     }
 
@@ -208,17 +217,18 @@ class Websocket_server {
   // Start the closing handshake for every subscriber and forget them.
   void close_all_clients() {
     for (auto& hdl : m_connections) {
-      try {
-        m_server.close(hdl, websocketpp::close::status::going_away, "Server shuting down");
-      } catch (websocketpp::exception const& e) {
-        LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
+      websocketpp::lib::error_code ec;
+      m_server.close(hdl, websocketpp::close::status::going_away, "Server shuting down", ec);
+      if (ec) {
+        LOG_ERR("Websocket client exception: {} {}\n", ec.value(), ec.message());
       }
     }
     con_list().swap(m_connections);
+    m_subscriber_count.store(0, std::memory_order_relaxed);
   }
 
   bool is_listening() {
-    return m_server.is_listening();
+    return m_listening.load();
   }
 
   // Processing thread body: drain the action queue until STOP arrives.
@@ -242,22 +252,28 @@ class Websocket_server {
       if (a.type == SUBSCRIBE) {
         lock_guard<mutex> guard(m_connection_lock);
         m_connections.insert(a.hdl);
+        m_subscriber_count.store(m_connections.size(), std::memory_order_relaxed);
       } else if (a.type == UNSUBSCRIBE) {
         lock_guard<mutex> guard(m_connection_lock);
         m_connections.erase(a.hdl);
+        m_subscriber_count.store(m_connections.size(), std::memory_order_relaxed);
       } else if (a.type == MESSAGE) {
         lock_guard<mutex> guard(m_connection_lock);
         m_server.send(a.hdl, a.msg);
       } else if (a.type == STOP) {
         lock_guard<mutex> guard(m_connection_lock);
-        try {
-          m_server.stop_listening();
-          close_all_clients();
-          is_running = false;
-        } catch (websocketpp::exception const& e) {
-          LOG_ERR("Websocket server exception: {} {}\n", e.code().value(), e.what());
-          m_connection_lock.unlock();
+        // The exception free overloads keep the error inside this branch: an
+        // exception here used to unlock m_connection_lock a second time and
+        // leave is_running set, which hung the thread and the join in main().
+        if (m_listening.exchange(false)) {
+          websocketpp::lib::error_code ec;
+          m_server.stop_listening(ec);
+          if (ec) {
+            LOG_ERR("Websocket stop_listening failed: {} {}\n", ec.value(), ec.message());
+          }
         }
+        close_all_clients();
+        is_running = false;
       } else if (a.type == BROADCAST) {
         lock_guard<mutex> guard(m_connection_lock);
         // A text frame must be valid UTF-8, so convert once for all clients.
@@ -281,6 +297,13 @@ class Websocket_server {
   websocketserver m_server;
   con_list m_connections;
   std::queue<action> m_actions;
+
+  // Set once listen() succeeded, cleared when the endpoint stops listening.
+  // Written on the IO thread, read from the UDP thread through is_listening().
+  std::atomic<bool> m_listening{false};
+
+  // Number of entries in m_connections, published for broadcast_message().
+  std::atomic<std::size_t> m_subscriber_count{0};
 
   mutex m_action_lock;
   mutex m_connection_lock;
