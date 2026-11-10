@@ -42,9 +42,15 @@ message(STATUS "WEBSERVER_TYPE = ${WEBSERVER_TYPE} (ENABLE_WEB_SERVER = ${ENABLE
 add_library(applog STATIC src/app_log.cc)
 target_include_directories(applog PUBLIC inc)
 
-# Every other source goes into the executable; app_log.cc is already linked.
+# Encoding helpers for the web front ends; kept apart so tests can link it.
+add_library(apptext STATIC src/text_encoding.cc)
+target_include_directories(apptext PUBLIC inc)
+target_link_libraries(apptext PUBLIC gbcodec)
+
+# Every other source goes into the executable; the libraries above take theirs.
 aux_source_directory(src SOURCES)
 list(FILTER SOURCES EXCLUDE REGEX "app_log\\.cc$")
+list(FILTER SOURCES EXCLUDE REGEX "text_encoding\\.cc$")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_WEB_SERVER=${ENABLE_WEB_SERVER})
@@ -52,7 +58,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_WEB_SERVER=${ENABLE_WE
 target_link_libraries(
     ${PROJECT_NAME}
     applog
-    gbcodec
+    apptext
     cmdline
     websocketpp
     asio

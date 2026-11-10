@@ -8,6 +8,11 @@ add_executable(app_log_test app_log_test.cc)
 target_link_libraries(app_log_test PRIVATE applog)
 add_test(NAME app_log COMMAND app_log_test)
 
+# textenc unit tests: UTF-8 pass-through and the GB2312 fallbacks.
+add_executable(text_encoding_test text_encoding_test.cc)
+target_link_libraries(text_encoding_test PRIVATE apptext)
+add_test(NAME text_encoding COMMAND text_encoding_test)
+
 # End-to-end test of the LogServer executable; needs Python 3.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
