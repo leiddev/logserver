@@ -22,28 +22,36 @@
 
 #include <asio.hpp>
 #include <algorithm>
+#include <atomic>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <memory>
-#include <vector>
 #include <mutex>
-#include <atomic>
+#include <vector>
 
 #include "common.h"
 #include "html_page.hh"
 
 //----------------------------------------------------------------------
-// One browser connection: the socket, the heartbeat timer, and whether this
-// connection was upgraded to the event stream at "/sse".
+// One browser connection: the socket, the heartbeat timer and the bytes
+// still waiting to be written to it. The socket and the timer may only be
+// used from the io_context thread; other threads post to it.
 //----------------------------------------------------------------------
 struct SseClient : public std::enable_shared_from_this<SseClient> {
     asio::ip::tcp::socket socket;
     asio::steady_timer timer;
-    bool is_sse_connection;
-    
+    std::deque<std::string> write_queue;
+    std::size_t queued_bytes;
+    bool is_writing;
+    bool close_after_write;
+
     SseClient(asio::io_context& io_ctx)
-        : socket(io_ctx), timer(io_ctx), is_sse_connection(false) {}
-    
+        : socket(io_ctx), timer(io_ctx), queued_bytes(0), is_writing(false), close_after_write(false) {}
+
+    // Cancel the heartbeat and close the socket. Call from the io_context
+    // thread only; the queued messages stay alive until the client is gone so
+    // that an in-flight write never points at freed memory.
     void close() {
         timer.cancel();
         std::error_code ec;
@@ -68,16 +76,17 @@ class Sse_server {
 
  private:
     void start_accept();
-    void handle_accept(const std::error_code& ec);
-    void handle_read_request(std::shared_ptr<SseClient> client, 
+    void handle_read_request(std::shared_ptr<SseClient> client,
                              std::shared_ptr<asio::streambuf> buffer,
                              const std::error_code& ec, std::size_t bytes_transferred);
     void send_sse_headers(std::shared_ptr<SseClient> client);
     void send_http_page(std::shared_ptr<SseClient> client, const std::string& body, const std::string& content_type);
     void send_404(std::shared_ptr<SseClient> client, const std::string& resource);
-    void send_heartbeat(std::shared_ptr<SseClient> client);
-    void broadcast_to_all(const std::string& message);
-    void remove_client(std::weak_ptr<SseClient> client);
+    void schedule_heartbeat(std::shared_ptr<SseClient> client);
+    void enqueue(std::shared_ptr<SseClient> client, std::string data);
+    void start_write(std::shared_ptr<SseClient> client);
+    void remove_client(std::shared_ptr<SseClient> client);
+    void shutdown_in_io_thread();
 
     std::string format_sse_event(const std::string& message);
     std::string get_content_type(const std::string& path);

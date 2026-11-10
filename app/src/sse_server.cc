@@ -4,6 +4,12 @@
  *
  * Implementation of the SSE front end: request parsing, the viewer page and
  * 404 responses, the event stream with its heartbeat, and the client list.
+ *
+ * Every socket operation happens on the io_context thread. broadcast_message()
+ * is called from the thread that receives the UDP datagrams, so it only takes
+ * a snapshot of the client list and posts the event to each client: a browser
+ * that stops reading fills that client's queue and is dropped, without ever
+ * holding up the receiving thread.
  */
 #include "sse_server.hh"
 
@@ -30,6 +36,11 @@ namespace {
     constexpr char SSE_EVENT_PREFIX[] = "data: ";
     constexpr char SSE_EVENT_SUFFIX[] = "\n\n";
     constexpr int SSE_HEARTBEAT_INTERVAL_SECONDS = 30;
+
+    // How much may be queued for one client before it is considered dead and
+    // closed. A browser reading normally never gets near this; one that
+    // stopped reading reaches it in a few seconds of busy logging.
+    constexpr std::size_t SSE_MAX_QUEUED_BYTES = 4 * 1024 * 1024;
 }
 
 Sse_server::Sse_server()
@@ -58,25 +69,46 @@ void Sse_server::run(uint16_t port) {
         start_accept();
         
         io_context_.run();
+
+        // The loop can also end without stop() having posted the shutdown, so
+        // close what is still open here; a second call is a no-op.
+        shutdown_in_io_thread();
     } catch (const std::exception& e) {
+        is_listening_ = false;
+        is_running_ = false;
         LOG_ERR("SSE server exception: {}\n", e.what());
     }
 }
 
 void Sse_server::stop() {
     if (!is_running_.load()) return;
-    is_running_ = false;
     is_listening_ = false;
 
-    acceptor_.close();
+    // The acceptor and the clients belong to the io_context thread, and so
+    // does the mutex-protected client list; hand the shutdown over to it.
+    asio::post(io_context_, [this] { shutdown_in_io_thread(); });
+}
 
-    std::lock_guard<std::mutex> lock(clients_mutex_);
-    for (auto& weak_client : clients_) {
-        if (auto client = weak_client.lock()) {
-            client->close();
+void Sse_server::shutdown_in_io_thread() {
+    if (!is_running_.exchange(false)) return;
+    is_listening_ = false;
+
+    std::error_code ec;
+    acceptor_.close(ec);
+
+    std::vector<std::shared_ptr<SseClient>> clients_to_close;
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        for (auto& weak_client : clients_) {
+            if (auto client = weak_client.lock()) {
+                clients_to_close.push_back(client);
+            }
         }
+        clients_.clear();
     }
-    clients_.clear();
+    for (auto& client : clients_to_close) {
+        client->close();
+    }
 
     io_context_.stop();
     LOG_INFO("SSE server stopped.\n");
@@ -112,9 +144,8 @@ void Sse_server::handle_read_request(std::shared_ptr<SseClient> client,
     std::istream stream(buffer.get());
     std::string request_line;
     if (!std::getline(stream, request_line)) {
-        std::string response = "HTTP/1.1 400 Bad Request\r\n\r\n";
-        asio::write(client->socket, asio::buffer(response));
-        client->close();
+        client->close_after_write = true;
+        enqueue(client, "HTTP/1.1 400 Bad Request\r\n\r\n");
         return;
     }
 
@@ -123,9 +154,8 @@ void Sse_server::handle_read_request(std::shared_ptr<SseClient> client,
     }
 
     if (request_line.compare(0, 4, "GET ") != 0) {
-        std::string response = "HTTP/1.1 400 Bad Request\r\n\r\n";
-        asio::write(client->socket, asio::buffer(response));
-        client->close();
+        client->close_after_write = true;
+        enqueue(client, "HTTP/1.1 400 Bad Request\r\n\r\n");
         return;
     }
 
@@ -139,9 +169,7 @@ void Sse_server::handle_read_request(std::shared_ptr<SseClient> client,
     }
 
     if (resource == "/sse") {
-        client->is_sse_connection = true;
         send_sse_headers(client);
-        LOG_INFO("SSE client connected from {}\n", client->socket.remote_endpoint().address().to_string());
     } else if (resource == "/" || resource == "/index.html") {
         send_http_page(client, get_sse_log_page_html(), "text/html; charset=utf-8");
     } else {
@@ -155,142 +183,149 @@ void Sse_server::send_sse_headers(std::shared_ptr<SseClient> client) {
         clients_.push_back(client);
     }
 
+    std::error_code ec;
+    auto endpoint = client->socket.remote_endpoint(ec);
+    if (!ec) {
+        LOG_INFO("SSE client connected from {}\n", endpoint.address().to_string());
+    }
+
     // asio::buffer on a char array takes all N bytes, terminator included, so
     // pass the length explicitly: the stray NUL turned the first event field
     // into "\0data" and made EventSource drop the first heartbeat.
-    asio::async_write(client->socket, asio::buffer(SSE_RESPONSE_HEADERS, sizeof(SSE_RESPONSE_HEADERS) - 1),
-        [this, client](const std::error_code& ec, std::size_t /*bytes*/) {
-            if (!ec) {
-                send_heartbeat(client);
-            } else {
-                remove_client(client);
-            }
-        });
+    enqueue(client, std::string(SSE_RESPONSE_HEADERS, sizeof(SSE_RESPONSE_HEADERS) - 1));
+    enqueue(client, format_sse_event("[heartbeat]"));
+    schedule_heartbeat(client);
 }
 
 void Sse_server::send_http_page(std::shared_ptr<SseClient> client, const std::string& body, const std::string& content_type) {
-    auto response = std::make_shared<std::string>();
-    *response = "HTTP/1.1 200 OK\r\n";
-    *response += "Content-Type: " + content_type + "\r\n";
-    *response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    *response += "Connection: close\r\n\r\n";
-    *response += body;
+    std::string response;
+    response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Type: " + content_type + "\r\n";
+    response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+    response += "Connection: close\r\n\r\n";
+    response += body;
 
-    asio::async_write(client->socket, asio::buffer(*response),
-        [client, response](const std::error_code& ec, std::size_t /*bytes*/) {
-            client->close();
-        });
+    client->close_after_write = true;
+    enqueue(client, response);
 }
 
 void Sse_server::send_404(std::shared_ptr<SseClient> client, const std::string& resource) {
-    auto response = std::make_shared<std::string>();
-    *response = "<!DOCTYPE html><title>Error 404</title><h1>Error 404</h1><p>Resource not found: ";
-    *response += resource;
-    *response += "</p>";
+    std::string body = "<!DOCTYPE html><title>Error 404</title><h1>Error 404</h1><p>Resource not found: ";
+    body += resource;
+    body += "</p>";
 
-    std::string header = "HTTP/1.1 404 Not Found\r\n";
-    header += "Content-Type: text/html; charset=utf-8\r\n";
-    header += "Content-Length: " + std::to_string(response->size()) + "\r\n";
-    header += "Connection: close\r\n\r\n";
-    *response = header + *response;
+    std::string response = HTTP_NOT_FOUND;
+    response += std::to_string(body.size()) + "\r\n";
+    response += "Connection: close\r\n\r\n";
+    response += body;
 
-    asio::async_write(client->socket, asio::buffer(*response),
-        [client, response](const std::error_code& ec, std::size_t /*bytes*/) {
-            client->close();
+    client->close_after_write = true;
+    enqueue(client, response);
+}
+
+void Sse_server::schedule_heartbeat(std::shared_ptr<SseClient> client) {
+    client->timer.expires_after(std::chrono::seconds(SSE_HEARTBEAT_INTERVAL_SECONDS));
+    client->timer.async_wait(
+        [this, client](const std::error_code& timer_ec) {
+            if (timer_ec) return;
+            enqueue(client, format_sse_event("[heartbeat]"));
+            schedule_heartbeat(client);
         });
 }
 
-void Sse_server::send_heartbeat(std::shared_ptr<SseClient> client) {
-    if (!is_running_.load()) return;
+void Sse_server::enqueue(std::shared_ptr<SseClient> client, std::string data) {
+    if (!client || !client->socket.is_open()) return;
 
-    auto heartbeat = std::make_shared<std::string>(format_sse_event("[heartbeat]"));
+    if (client->queued_bytes + data.size() > SSE_MAX_QUEUED_BYTES) {
+        LOG_WARN("SSE client is not reading, closing it\n");
+        remove_client(client);
+        return;
+    }
 
-    asio::async_write(client->socket, asio::buffer(*heartbeat),
-        [this, client, heartbeat](const std::error_code& ec, std::size_t /*bytes*/) {
+    client->queued_bytes += data.size();
+    client->write_queue.push_back(std::move(data));
+    if (!client->is_writing) {
+        start_write(client);
+    }
+}
+
+void Sse_server::start_write(std::shared_ptr<SseClient> client) {
+    client->is_writing = true;
+
+    // The front of the queue stays alive until the write completes, so the
+    // buffer cannot dangle.
+    asio::async_write(client->socket, asio::buffer(client->write_queue.front()),
+        [this, client](const std::error_code& ec, std::size_t /*bytes*/) {
             if (ec) {
                 remove_client(client);
                 return;
             }
 
-            client->timer.expires_after(std::chrono::seconds(SSE_HEARTBEAT_INTERVAL_SECONDS));
-            client->timer.async_wait(
-                [this, client](const std::error_code& timer_ec) {
-                    if (!timer_ec) {
-                        send_heartbeat(client);
-                    }
-                });
+            client->queued_bytes -= client->write_queue.front().size();
+            client->write_queue.pop_front();
+
+            if (!client->write_queue.empty()) {
+                start_write(client);
+                return;
+            }
+
+            client->is_writing = false;
+            if (client->close_after_write) {
+                remove_client(client);
+            }
         });
 }
 
 void Sse_server::broadcast_message(const std::string& message) {
     if (message.empty()) return;
-
-    std::vector<std::weak_ptr<SseClient>> clients_to_remove;
+    if (!is_running_.load()) return;
 
     // EventSource always decodes the stream as UTF-8, so a line that arrives
     // in GB2312 has to be converted here or the browser shows mojibake.
-    auto sse_data = std::make_shared<std::string>(format_sse_event(textenc::toDisplayUtf8(message)));
+    auto sse_data = std::make_shared<const std::string>(format_sse_event(textenc::toDisplayUtf8(message)));
 
+    std::vector<std::shared_ptr<SseClient>> clients;
     {
         std::lock_guard<std::mutex> lock(clients_mutex_);
 
-        if (clients_.empty()) return;
-
-        for (auto& weak_client : clients_) {
-            if (auto client = weak_client.lock()) {
-                if (!client->is_sse_connection) {
-                    continue;
-                }
-
-                std::error_code ec;
-                asio::write(client->socket, asio::buffer(*sse_data), ec);
-                if (ec) {
-                    clients_to_remove.push_back(weak_client);
-                }
+        for (auto it = clients_.begin(); it != clients_.end(); ) {
+            if (auto client = it->lock()) {
+                clients.push_back(client);
+                ++it;
             } else {
-                clients_to_remove.push_back(weak_client);
+                it = clients_.erase(it);
             }
         }
     }
 
-    if (!clients_to_remove.empty()) {
+    // Queueing, and therefore every socket write, belongs to the io_context
+    // thread; writing here would block the thread that receives the datagrams
+    // as soon as one browser stops reading.
+    for (auto& client : clients) {
+        asio::post(io_context_, [this, client, sse_data] { enqueue(client, *sse_data); });
+    }
+}
+
+void Sse_server::remove_client(std::shared_ptr<SseClient> client) {
+    if (!client) return;
+
+    {
         std::lock_guard<std::mutex> lock(clients_mutex_);
         for (auto it = clients_.begin(); it != clients_.end(); ) {
-            bool should_remove = false;
-            for (const auto& to_remove : clients_to_remove) {
-                if (!it->owner_before(to_remove) && !to_remove.owner_before(*it)) {
-                    should_remove = true;
-                    break;
-                }
-            }
-            if (should_remove) {
+            auto existing = it->lock();
+            if (!existing) {
                 it = clients_.erase(it);
+            } else if (existing == client) {
+                it = clients_.erase(it);
+                LOG_INFO("SSE client removed\n");
+                break;
             } else {
                 ++it;
             }
         }
     }
-}
 
-void Sse_server::remove_client(std::weak_ptr<SseClient> client) {
-    auto client_ptr = client.lock();
-    if (!client_ptr) return;
-
-    std::lock_guard<std::mutex> lock(clients_mutex_);
-
-    for (auto it = clients_.begin(); it != clients_.end(); ) {
-        if (it->expired()) {
-            it = clients_.erase(it);
-        } else if (it->owner_before(client) || client.owner_before(*it)) {
-            ++it;
-        } else {
-            if (auto c = it->lock()) {
-                c->close();
-            }
-            it = clients_.erase(it);
-            LOG_INFO("SSE client removed\n");
-        }
-    }
+    client->close();
 }
 
 std::string Sse_server::format_sse_event(const std::string& message) {
