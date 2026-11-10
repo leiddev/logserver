@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2026.11
+ *
+ * Process wide logger: console output, "{}" formatted messages, and a size
+ * based rotating log file whose archives are named after the local time.
+ * Kept free of third party dependencies so the server builds anywhere.
  */
 #pragma once
 #ifndef _APP_LOG_HH_

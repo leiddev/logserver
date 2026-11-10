@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
 
-# app_log 单元测试
+# app_log unit tests: formatting, file writes, rotation and recovery.
 add_executable(app_log_test app_log_test.cc)
 target_link_libraries(app_log_test PRIVATE applog)
 add_test(NAME app_log COMMAND app_log_test)
 
-# LogServer 端到端测试（需要 Python 3）
+# End-to-end test of the LogServer executable; needs Python 3.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(

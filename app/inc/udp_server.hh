@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2025.2
+ *
+ * UDP listener that receives log datagrams from the producers and hands each
+ * one to a callback, which forwards it to the TCP clients, the web front end
+ * and the log file.
  */
 #pragma once
 #ifndef _UDP_SERVER_HH_
@@ -21,7 +25,8 @@
 #include "common.h"
 
 //----------------------------------------------------------------------
-// UDP 服务器类：负责监听UDP端口，接收消息后转发给所有TCP客户端
+// UDP server: listens on the UDP port and passes every received datagram
+// to the callback, which fans it out to the TCP clients and the web pages.
 //----------------------------------------------------------------------
 
 class Udp_server {
@@ -34,11 +39,9 @@ class Udp_server {
     start_receive();
   }
 
-  // 停止 UDP 服务，取消异步接收并关闭 socket
+  // Cancel the pending receive and close the socket.
   void stop() {
-    // 取消所有异步操作
     socket_.cancel();
-    // 关闭 UDP socket
     socket_.close();
   }
 
@@ -59,7 +62,8 @@ class Udp_server {
                                              bytes_recvd);
                                    }
                                    std::string message(data_.data(), bytes_recvd);
-                                   // 转发UDP消息给所有TCP客户端
+                                   // Hand the datagram to the owner, which fans
+                                   // it out to TCP clients, web pages and file.
                                    if (broadcast_cb_) {
                                      broadcast_cb_(message);
                                    }

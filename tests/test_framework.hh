@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2026.11
+ *
+ * Minimal assertion helper for the test executables: no dependencies, C++11.
+ *
+ *   TEST_CASE("name") { CHECK(cond); CHECK_EQ(1, 1); }
+ *   int main() { return testfw::run_all(); }
  */
 #ifndef _TEST_FRAMEWORK_HH_
 #define _TEST_FRAMEWORK_HH_
-
-// Minimal assertion helper for the test executables: no dependencies, C++11.
-//
-//   TEST_CASE("name") { CHECK(cond); CHECK_EQ(1, 1); }
-//   int main() { return testfw::run_all(); }
 
 #include <cstdio>
 #include <functional>

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2025.2
+ *
+ * Embeds the log viewer pages into the executable. Each .html file holds a
+ * raw string literal, so including it here yields the page text at compile
+ * time and the server needs no files on the target device.
  */
 
 const char* ws_log_page_html =

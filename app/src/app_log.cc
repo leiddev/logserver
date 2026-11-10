@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2026.11
+ *
+ * Implementation of the process wide logger: the "{}" formatter, console and
+ * file output, size based rotation into timestamped archives, retention, and
+ * recovery when the log file is removed or truncated from outside.
  */
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS

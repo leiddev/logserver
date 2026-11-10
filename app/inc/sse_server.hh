@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2025.2
+ *
+ * Server-Sent Events front end, the default build (WEBSERVER_TYPE=SSE).
+ * Runs a minimal HTTP server that serves the log viewer page at "/", streams
+ * log lines to browsers on "/sse", and answers everything else with 404.
  */
 #pragma once
 #ifndef _SSE_SERVER_HH_
@@ -29,7 +33,8 @@
 #include "html_page.hh"
 
 //----------------------------------------------------------------------
-// SSE 客户端连接结构
+// One browser connection: the socket, the heartbeat timer, and whether this
+// connection was upgraded to the event stream at "/sse".
 //----------------------------------------------------------------------
 struct SseClient : public std::enable_shared_from_this<SseClient> {
     asio::ip::tcp::socket socket;
@@ -49,7 +54,7 @@ struct SseClient : public std::enable_shared_from_this<SseClient> {
 };
 
 //----------------------------------------------------------------------
-// SSE 服务器类
+// Sse_server: accepts HTTP connections and keeps the live event streams.
 //----------------------------------------------------------------------
 class Sse_server {
  public:

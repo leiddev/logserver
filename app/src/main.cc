@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2023.9
+ *
+ * Program entry point: parses the command line, sets up logging, starts the
+ * UDP and TCP servers plus the chosen web front end (SSE or WebSocket), and
+ * ties every received datagram to all of the outputs.
  */
 
 // Web Server Configuration:

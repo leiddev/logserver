@@ -1,6 +1,8 @@
 u8R"xxx(
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
+<!-- SSE log viewer: subscribes to /sse on this host, renders incoming
+     lines in batches, and can auto scroll, clear or save them. -->
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -107,18 +109,18 @@ u8R"xxx(
         let eventSource = null;
         let autoScroll = true;
         const maxLogLines = 10000;
-        const removeBatchSize = 500;   // 一次删除的旧日志数量，减少 DOM 操作频率
-        const flushInterval = 50;      // 批量写入间隔（毫秒）
+        const removeBatchSize = 500;   // lines dropped per trim, to keep DOM churn low
+        const flushInterval = 50;      // batch flush interval in milliseconds
         const reconnectDelay = 3000;
         let manualClose = false;
         let retryCount = 0;
 
-        // 消息缓冲与定时器
+        // Pending lines and the flush timer
         let pendingLogs = [];
         let flushTimer = null;
 
         /**
-         * 将日志加入缓冲队列，由 flushLogs 统一批量写入 DOM
+         * Queue a line; flushLogs writes the batch to the DOM later.
          */
         function appendLog(message, type = "normal") {
             pendingLogs.push({ message, type });
@@ -128,7 +130,7 @@ u8R"xxx(
         }
 
         /**
-         * 批量将缓冲中的日志写入 DOM，并清理超出上限的旧日志
+         * Write the queued lines to the DOM and trim the oldest ones.
          */
         function flushLogs() {
             flushTimer = null;
@@ -150,7 +152,7 @@ u8R"xxx(
             pendingLogs.length = 0;
             logBox.appendChild(fragment);
 
-            // 批量删除旧日志：一次多删一些，降低后续触发频率
+            // Trim more than needed at once so trimming runs less often
             if (logBox.children.length > maxLogLines) {
                 const toRemove = logBox.children.length - maxLogLines + removeBatchSize;
                 for (let i = 0; i < toRemove && logBox.firstChild; i++) {
@@ -158,7 +160,7 @@ u8R"xxx(
                 }
             }
 
-            // 使用 requestAnimationFrame 避免同步强制布局
+            // Scroll in requestAnimationFrame to avoid forced synchronous layout
             if (autoScroll) {
                 requestAnimationFrame(() => {
                     logBox.scrollTop = logBox.scrollHeight;
@@ -260,7 +262,7 @@ u8R"xxx(
         }
 
         function clearLogBox() {
-            // 清空缓冲和定时器，防止后续 flush 把旧数据写回来
+            // Drop the queue and its timer so a pending flush cannot repopulate the box
             pendingLogs = [];
             if (flushTimer) {
                 clearTimeout(flushTimer);
@@ -270,7 +272,7 @@ u8R"xxx(
         }
 
         function saveLog() {
-            // 保存前强制刷新缓冲，确保最新日志也被导出
+            // Flush first so the newest lines make it into the export
             if (flushTimer) {
                 clearTimeout(flushTimer);
                 flushLogs();

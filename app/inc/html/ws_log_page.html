@@ -1,37 +1,39 @@
 u8R"xxx(
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
+<!-- WebSocket log viewer: connects to the server on this host, renders
+     incoming lines in batches, and can auto scroll, clear or save them. -->
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <title>日志监控</title>
     <style>
-        /* 使 html 和 body 占满整个浏览器窗口 */
+        /* Make html and body fill the browser window */
         html, body {
             height: 100%;
             margin: 0;
             padding: 0;
         }
-        /* 使用 Flex 布局，让容器占满全屏 */
+        /* Flex layout so the container fills the viewport */
         #container {
             display: flex;
             flex-direction: column;
             height: 100%;
         }
-        /* 标题样式（左对齐） */
+        /* Title, left aligned */
         #title {
             text-align: left;
             font-size: 24px;
-            background-color: #f0f0f0; /* 与控制区背景一致 */
+            background-color: #f0f0f0; /* same as the controls background */
             padding: 10px 10px 0px 10px;
         }
-        /* 控制区样式 */
+        /* Controls bar */
         #controls {
             padding: 10px;
-            background-color: #f0f0f0; /* 控制区背景颜色 */
+            background-color: #f0f0f0; /* controls background */
             border-bottom: 1px solid #ccc;
         }
-            /* 按钮基础样式 */
+            /* Base style shared by every button */
             #controls button {
                 margin-right: 10px;
                 padding: 8px 15px;
@@ -41,37 +43,37 @@ u8R"xxx(
                 cursor: pointer;
                 transition: background-color 0.2s ease, color 0.2s ease;
             }
-        /* 连接 WebSocket 按钮：绿色（已连接）/ 红色（未连接） */
+        /* Connect toggle: green while connected, red while stopped */
         .connect-btn {
-            background-color: #28a745; /* 绿色 */
+            background-color: #28a745; /* green */
             color: white;
         }
 
         .disconnect-btn {
-            background-color: #dc3545; /* 红色 */
+            background-color: #dc3545; /* red */
             color: white;
         }
-        /* 自动滚动按钮：蓝色（自动滚动开）/ 灰色（自动滚动关） */
+        /* Auto scroll toggle: blue while on, grey while off */
         .scroll-on {
-            background-color: #007bff; /* 蓝色 */
+            background-color: #007bff; /* blue */
             color: white;
         }
 
         .scroll-off {
-            background-color: #6c757d; /* 灰色 */
+            background-color: #6c757d; /* grey */
             color: white;
         }
-        /* 其他按钮样式 */
+        /* Clear and save buttons */
         #clearLogBtn {
-            background-color: #ffc107; /* 黄色 */
+            background-color: #ffc107; /* yellow */
             color: black;
         }
 
         #saveLogBtn {
-            background-color: #17a2b8; /* 青色 */
+            background-color: #17a2b8; /* teal */
             color: white;
         }
-        /* 日志框样式 */
+        /* Log box */
         #log-box {
             flex: 1;
             min-height: 300px;
@@ -86,10 +88,10 @@ u8R"xxx(
 </head>
 <body>
     <div id="container">
-        <!-- 页面标题（左对齐） -->
+        <!-- Page title -->
         <div id="title">日志监控</div>
 
-        <!-- 控制区 -->
+        <!-- Controls -->
         <div id="controls">
             <button id="toggleConnectBtn" class="connect-btn">启动</button>
             <button id="toggleScrollBtn" class="scroll-on">自动滚动</button>
@@ -97,40 +99,40 @@ u8R"xxx(
             <button id="saveLogBtn">保存</button>
         </div>
 
-        <!-- 日志显示框 -->
+        <!-- Log output area -->
         <div id="log-box"></div>
     </div>
 
     <script>
         let ws = null;
-        // 自动滚动状态
+        // Whether the view follows the newest line
         let autoScroll = true;
-        // 最大保留日志行数
+        // Upper bound on retained lines
         const maxLogLines = 10000;
-        // 一次删除的旧日志数量，减少 DOM 操作频率
+        // Lines dropped per trim, to keep DOM churn low
         const removeBatchSize = 500;
-        // 批量写入间隔（毫秒）
+        // Batch flush interval in milliseconds
         const flushInterval = 50;
-        // 重连延时（毫秒）
+        // Reconnect delay in milliseconds
         const reconnectDelay = 3000;
-        // 是否主动断开连接
+        // Set when the user asked to disconnect
         let manualClose = false;
-        // 连续重连次数
+        // Consecutive reconnect attempts
         let retryCount = 0;
 
-        // 消息缓冲与定时器
+        // Pending lines and the flush timer
         let pendingLogs = [];
         let flushTimer = null;
 
-        // 动态生成WebSocket协议（wss或ws）
+        // Pick the WebSocket scheme from the page protocol
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        // 获取当前页面的主机（含端口，如 example.com:8080）
+        // Host and port of the page, e.g. example.com:8080
         const wsHost = window.location.host;
-        // 生成WebSocket服务端URI
+        // WebSocket endpoint URI
         const wsUrl = `${wsProtocol}${wsHost}`;
 
         /**
-         * 将日志加入缓冲队列，由 flushLogs 统一批量写入 DOM
+         * Queue a line; flushLogs writes the batch to the DOM later.
          */
         function appendLog(message, type = "normal") {
             pendingLogs.push({ message, type });
@@ -140,7 +142,7 @@ u8R"xxx(
         }
 
         /**
-         * 批量将缓冲中的日志写入 DOM，并清理超出上限的旧日志
+         * Write the queued lines to the DOM and trim the oldest ones.
          */
         function flushLogs() {
             flushTimer = null;
@@ -162,7 +164,7 @@ u8R"xxx(
             pendingLogs.length = 0;
             logBox.appendChild(fragment);
 
-            // 批量删除旧日志：一次多删一些，降低后续触发频率
+            // Trim more than needed at once so trimming runs less often
             if (logBox.children.length > maxLogLines) {
                 const toRemove = logBox.children.length - maxLogLines + removeBatchSize;
                 for (let i = 0; i < toRemove && logBox.firstChild; i++) {
@@ -170,7 +172,7 @@ u8R"xxx(
                 }
             }
 
-            // 使用 requestAnimationFrame 避免同步强制布局
+            // Scroll in requestAnimationFrame to avoid forced synchronous layout
             if (autoScroll) {
                 requestAnimationFrame(() => {
                     logBox.scrollTop = logBox.scrollHeight;
@@ -205,7 +207,7 @@ u8R"xxx(
             };
 
             ws.onclose = (event) => {
-                // 如果是正常关闭，显示提示并回到未连接状态
+                // A clean close is reported, otherwise the drop is logged as an error
                 if (event.wasClean) {
                     appendLog("WebSocket 连接已经关闭", "info");
                     manualClose = true;
@@ -215,7 +217,7 @@ u8R"xxx(
                 updateConnectButton(false);
 
                 if (!manualClose) {
-                    // 尝试重连
+                    // Try to reconnect
                     if (retryCount < 3) {
                         retryCount++;
                         appendLog("WebSocket 异常断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
@@ -263,7 +265,7 @@ u8R"xxx(
         }
 
         function clearLogBox() {
-            // 清空缓冲和定时器，防止后续 flush 把旧数据写回来
+            // Drop the queue and its timer so a pending flush cannot repopulate the box
             pendingLogs = [];
             if (flushTimer) {
                 clearTimeout(flushTimer);
@@ -273,7 +275,7 @@ u8R"xxx(
         }
 
         function saveLog() {
-            // 保存前强制刷新缓冲，确保最新日志也被导出
+            // Flush first so the newest lines make it into the export
             if (flushTimer) {
                 clearTimeout(flushTimer);
                 flushLogs();

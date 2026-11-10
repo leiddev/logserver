@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2026.11
+ *
+ * Unit tests for applog: message formatting, raw writes, and file archiving.
+ * The file tests need a writable tmpfs on Linux; each case uses its own
+ * subdirectory so the process wide logger starts from a clean state.
  */
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
 #endif
-
-// Unit tests for applog: message formatting, raw writes, and file archiving.
-// The file tests need a writable tmpfs on Linux; each case uses its own
-// subdirectory so the process wide logger starts from a clean state.
 
 #include "app_log.hh"
 #include "test_framework.hh"

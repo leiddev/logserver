@@ -1,18 +1,20 @@
 cmake_minimum_required(VERSION 3.10)
 
-# 显示CMake版本
+# LogServer: UDP log collector with TCP, SSE and WebSocket front ends.
+# This file drives the build for every supported platform; the toolchain
+# files select the compiler and the target flags.
+
 message(STATUS "CMAKE_VERSION = ${CMAKE_VERSION}")
 
-# 设置项目名称和版本
 project(LogServer VERSION 1.0.0)
 
-# 启用详细输出
+# Echo every compiler and linker invocation.
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-# 显示编译平台相关设置
+# Platform flags come from the toolchain file, when one is used.
 message(STATUS "PLATFORM_FLAGS = " ${PLATFORM_FLAGS})
 
-# 编译器相关选项
+# Language level and warning suppressions; C++11 is the project baseline.
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_FLAGS} -g -std=c11")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PLATFORM_FLAGS} -g -std=c++11")
@@ -22,20 +24,20 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PLATFORM_FLAGS} /EHsc /std:c++14")
 endif()
 
-# 包含第三方库目录
+# Bundled third party libraries.
 add_subdirectory(3rdparty ${CMAKE_BINARY_DIR}/out/3rdparty)
 
-# 添加 app 子目录
+# The server itself.
 add_subdirectory(app ${CMAKE_BINARY_DIR}/out/app)
 
-# 测试
+# Tests are built by default; pass -DBUILD_TESTING=OFF to skip them.
 include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(tests ${CMAKE_BINARY_DIR}/out/tests)
 endif()
 
 # ---------------------------------------------------------------------------------------
-# 显示编译器和链接器设置
+# Dump the compiler and linker flags for the chosen configuration.
 # ---------------------------------------------------------------------------------------
 message(STATUS "CMAKE_C_FLAGS = " ${CMAKE_C_FLAGS})
 message(STATUS "CMAKE_C_FLAGS_DEBUG = " ${CMAKE_C_FLAGS_DEBUG})
@@ -68,7 +70,7 @@ message(STATUS "CMAKE_SHARED_LINKER_FLAGS_RELEASE = " ${CMAKE_SHARED_LINKER_FLAG
 message(STATUS "CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO = " ${CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO})
 
 # ---------------------------------------------------------------------------------------
-# 显示操作系统信息
+# Host and target operating system.
 # ---------------------------------------------------------------------------------------
 if(CMAKE_HOST_SYSTEM_NAME MATCHES "Linux")
 	message(STATUS "Current OS is Linux.")
@@ -87,7 +89,7 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------------------
-# 显示CPU架构信息
+# Host and target CPU architecture.
 # ---------------------------------------------------------------------------------------
 if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
 	message(STATUS "Current CPU is x86_64 CPU.")
@@ -110,7 +112,7 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------------------
-# 显示编译器信息
+# Compiler identification and version.
 # ---------------------------------------------------------------------------------------
 message(STATUS "C++ compiler id: " ${CMAKE_CXX_COMPILER_ID})
 message(STATUS "C++ compiler version is: " ${CMAKE_CXX_COMPILER_VERSION})

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2026.7
+ *
+ * Implementation of the SSE front end: request parsing, the viewer page and
+ * 404 responses, the event stream with its heartbeat, and the client list.
  */
 #include "sse_server.hh"
 

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 /*
  * Leid 2025.2
+ *
+ * Accessors for the log viewer pages that are compiled into the executable.
+ * One page per web server type; the matching one is served at "/" .
  */
 #pragma once
 #ifndef _HTML_PAGE_HH_

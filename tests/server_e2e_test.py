@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
+#
+# Leid 2026.11
+#
 """
 End-to-end test for the LogServer executable.
 
