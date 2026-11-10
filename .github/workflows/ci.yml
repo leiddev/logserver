@@ -53,3 +53,27 @@ jobs:
       - name: Smoke run
         working-directory: build/out/app
         run: ./LogServer --help
+
+  thread-sanitizer:
+    # Reproduces the data race on Websocket_server::m_connections. This job is
+    # expected to fail until broadcast_message() stops reading the subscriber
+    # set without m_connection_lock.
+    name: WebSocket broadcast race (ThreadSanitizer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Recent Ubuntu kernels map memory with more entropy than the
+      # ThreadSanitizer runtime expects; without this it aborts before the
+      # test runs.
+      - name: Lower mmap entropy for ThreadSanitizer
+        run: sudo sysctl -w vm.mmap_rnd_bits=28 || true
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON -DEXAMPLE=OFF -DWEBSERVER_TYPE=WEBSOCKET -DLOG_SERVER_TSAN_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --target websocket_broadcast_race_test --parallel
+
+      - name: Test
+        run: ctest --test-dir build -R websocket_broadcast_race --output-on-failure
