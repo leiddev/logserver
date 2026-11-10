@@ -29,8 +29,12 @@
 #include <functional>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <queue>
 #include <set>
+#include <string>
+#include <vector>
 
 #include "common.h"
 #include "html_page.hh"
@@ -125,6 +129,7 @@ class Websocket_server {
       lock_guard<mutex> guard(m_action_lock);
       connection_hdl hdl;
       std::queue<action>().swap(m_actions);
+      m_queued_broadcast_bytes = 0;
       m_actions.push(action(STOP, hdl));
     }
     m_action_cond.notify_one();
@@ -134,16 +139,37 @@ class Websocket_server {
   // the processing thread, so it must not be looked at here; the count is
   // published separately to keep the common "nobody is watching" case from
   // waking the processing thread for every log line.
+  //
+  // The queue is bounded so that a processing thread that falls behind (many
+  // clients, or a flood of datagrams) cannot grow it without limit. Both the
+  // number of queued lines and the bytes they hold are checked: a 64 KB
+  // datagram costs its payload, a short line costs the action itself. Dropped
+  // lines are counted and reported; real time logs tolerate a gap here, and
+  // the alternative is unbounded memory.
   void broadcast_message(const std::string& message) {
     if (m_subscriber_count.load(std::memory_order_relaxed) == 0) {
       return;
     }
 
+    bool accepted = false;
     {
       lock_guard<mutex> guard(m_action_lock);
-      connection_hdl hdl;
-      m_actions.push(action(BROADCAST, hdl, message));
+      if (m_actions.size() < kMaxQueuedActions && m_queued_broadcast_bytes + message.size() <= kMaxQueuedBytes) {
+        m_queued_broadcast_bytes += message.size();
+        connection_hdl hdl;
+        m_actions.push(action(BROADCAST, hdl, message));
+        accepted = true;
+      }
     }
+
+    if (!accepted) {
+      const std::uint64_t dropped = m_dropped_broadcasts.fetch_add(1, std::memory_order_relaxed) + 1;
+      if (dropped % kDroppedLogInterval == 1) {
+        LOG_WARN("Websocket broadcast queue is full, {} log line(s) dropped\n", dropped);
+      }
+      return;
+    }
+
     m_action_cond.notify_one();
   }
 
@@ -231,6 +257,9 @@ class Websocket_server {
 
       action a = m_actions.front();
       m_actions.pop();
+      if (a.type == BROADCAST) {
+        m_queued_broadcast_bytes -= a.str.size();
+      }
 
       lock.unlock();
 
@@ -262,12 +291,46 @@ class Websocket_server {
         // toDisplayUtf8 never fails, which is what keeps a malformed line from
         // silently disappearing the way the old GB2312 retry did.
         const std::string body = textenc::toDisplayUtf8(a.str);
-        for (auto& hdl : m_connections) {
-          try {
-            m_server.send(hdl, body, websocketpp::frame::opcode::text);
-          } catch (websocketpp::exception const& e) {
-            LOG_ERR("Websocket client exception: {} {}\n", e.code().value(), e.what());
+
+        // Walk a copy: a client that is dropped is removed from m_connections
+        // after the walk, so the set is not modified while it is read.
+        std::vector<connection_hdl> subscribers(m_connections.begin(), m_connections.end());
+        std::vector<connection_hdl> dropped;
+        for (auto& hdl : subscribers) {
+          websocketpp::lib::error_code ec;
+          websocketserver::connection_ptr con = m_server.get_con_from_hdl(hdl, ec);
+          if (ec) {
+            dropped.push_back(hdl);
+            continue;
           }
+
+          // A browser that stopped reading piles frames up in the library's
+          // write queue. Past this much it is gone as far as we are concerned;
+          // policy_violation is a terminal close, so the TCP connection is
+          // dropped once the close frame is written.
+          if (con->get_buffered_amount() > kMaxBufferedBytes) {
+            websocketpp::lib::error_code close_ec;
+            m_server.close(hdl, websocketpp::close::status::policy_violation, "client is not reading", close_ec);
+            if (close_ec) {
+              LOG_ERR("Websocket slow client close failed: {} {}\n", close_ec.value(), close_ec.message());
+            } else {
+              LOG_WARN("Websocket client is not reading, dropping it\n");
+            }
+            dropped.push_back(hdl);
+            continue;
+          }
+
+          m_server.send(hdl, body, websocketpp::frame::opcode::text, ec);
+          if (ec) {
+            LOG_ERR("Websocket client exception: {} {}\n", ec.value(), ec.message());
+          }
+        }
+
+        for (auto& hdl : dropped) {
+          m_connections.erase(hdl);
+        }
+        if (!dropped.empty()) {
+          m_subscriber_count.store(m_connections.size(), std::memory_order_relaxed);
         }
       }
     }
@@ -276,9 +339,24 @@ class Websocket_server {
  private:
   typedef std::set<connection_hdl, std::owner_less<connection_hdl> > con_list;
 
+  // Limits that keep a stalled browser or a flood of datagrams from growing
+  // the server without bound. Both are far above what a working setup reaches.
+  enum {
+    kMaxQueuedActions = 4096,             // broadcast lines waiting for the processing thread
+    kMaxQueuedBytes = 8 * 1024 * 1024,    // payload bytes in those lines
+    kMaxBufferedBytes = 4 * 1024 * 1024,  // unsent bytes queued for one client
+    kDroppedLogInterval = 1024            // report dropped lines this often
+  };
+
   websocketserver m_server;
   con_list m_connections;
   std::queue<action> m_actions;
+
+  // Bytes held by the BROADCAST entries in m_actions; guarded by m_action_lock.
+  std::size_t m_queued_broadcast_bytes{0};
+
+  // Broadcast lines dropped because the queue was full.
+  std::atomic<std::uint64_t> m_dropped_broadcasts{0};
 
   // Set once listen() succeeded, cleared when the endpoint stops listening.
   // Written on the IO thread, read from the UDP thread through is_listening().

@@ -476,6 +476,42 @@ def check_ws_ignores_input(ctx):
     sock.close()
 
 
+def check_ws_slow_consumer(ctx):
+    """A browser that stops reading must be dropped instead of buffered forever.
+
+    websocketpp queues frames for a client that does not read them, so without
+    a limit the server grows with every log line. The check floods far past the
+    per client limit and expects the server to close that connection while the
+    rest of the service keeps working.
+    """
+    slow = ctx.server.ws_connect()
+    ctx.check(slow is not None, "the slow WebSocket client connects")
+    if slow is None:
+        return
+    time.sleep(0.3)
+
+    for index in range(320):
+        body = b"WS-STALL-%03d " % index
+        body += b"x" * (60000 - len(body))
+        ctx.server.send_log(body + b"\n")
+        time.sleep(0.0002)
+
+    ctx.check(stalled_closed(slow, 10.0),
+              "the server drops a WebSocket client that stopped reading")
+    ctx.check(ctx.server.alive(), "the server survives a slow WebSocket client")
+
+    fresh = ctx.server.ws_connect()
+    ctx.check(fresh is not None, "a new WebSocket client connects after the drop")
+    if fresh is not None:
+        time.sleep(0.3)
+        expected = b"AFTER-WS-DROP\n"
+        ctx.server.send_log(expected)
+        payload = ws_read_until(fresh, lambda frame: frame == expected, 5)
+        ctx.check(payload == expected,
+                  "broadcasts continue after a slow client was dropped")
+        fresh.close()
+
+
 def check_ws_churn(ctx):
     """Connect and disconnect clients while log lines flood in.
 
@@ -580,6 +616,7 @@ def main():
         else:
             check_ws_fanout(ctx)
             check_ws_ignores_input(ctx)
+            check_ws_slow_consumer(ctx)
             check_ws_churn(ctx)
             check_ws_bad_handshake(ctx)
     finally:
