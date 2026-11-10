@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [V0.8.4] - 2026-11-10
+
+### Fixed
+
+- UDP 接收缓冲区此前固定为 1024 字节，超过该长度的日志报文会被内核截断且不报错，导致长日志（如打印配置 JSON）落盘时被切断，并因丢失结尾换行而与下一条日志粘在同一行。现在缓冲区扩展到 65536 字节，覆盖 IPv4 下 65507 字节的最大载荷。
+
 ## [V0.8.3] - 2026-11-09
 
 ### Fixed
@@ -149,7 +155,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.4...HEAD
+[V0.8.4]: https://github.com/leiddev/logserver/releases/tag/v0.8.4
 [V0.8.3]: https://github.com/leiddev/logserver/releases/tag/v0.8.3
 [V0.8.2]: https://github.com/leiddev/logserver/releases/tag/v0.8.2
 [V0.8.1]: https://github.com/leiddev/logserver/releases/tag/v0.8.1
