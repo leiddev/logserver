@@ -222,6 +222,8 @@ def main():
             payload = recv_until(sse, b"data: sse-b", 5)
             check(b"data: sse-a\ndata: sse-b\n" in payload,
                   "SSE receives one data: line per log line")
+            check(b"\x00" not in headers + payload,
+                  "SSE stream carries no NUL byte, including after the headers")
 
             # GB2312 must arrive as UTF-8: EventSource always decodes as UTF-8.
             udp.sendto(GB2312_CHINESE + b"\n", ("127.0.0.1", udp_port))

@@ -155,7 +155,10 @@ void Sse_server::send_sse_headers(std::shared_ptr<SseClient> client) {
         clients_.push_back(client);
     }
 
-    asio::async_write(client->socket, asio::buffer(SSE_RESPONSE_HEADERS),
+    // asio::buffer on a char array takes all N bytes, terminator included, so
+    // pass the length explicitly: the stray NUL turned the first event field
+    // into "\0data" and made EventSource drop the first heartbeat.
+    asio::async_write(client->socket, asio::buffer(SSE_RESPONSE_HEADERS, sizeof(SSE_RESPONSE_HEADERS) - 1),
         [this, client](const std::error_code& ec, std::size_t /*bytes*/) {
             if (!ec) {
                 send_heartbeat(client);
