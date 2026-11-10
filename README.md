@@ -68,6 +68,7 @@ cmake -S . -B build -DWEBSERVER_TYPE=WEBSOCKET
 - WebSocket 服务器与 Web 服务器共用相同的端口
 - 访问根路径 `/` 显示日志查看页面
 - WebSocket 连接端点为根路径 `/`，用于接收实时日志推送
+- 日志流是单向的：客户端发来的数据帧会被忽略，只处理 ping/pong/close 等控制帧
 - 支持多客户端并发连接，断开连接后自动清理资源
 - 与 TCP、SSE 服务器一致，监听 IPv4 地址
 
