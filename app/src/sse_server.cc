@@ -24,10 +24,6 @@ namespace {
         "Access-Control-Allow-Origin: *\r\n"
         "X-Accel-Buffering: no\r\n\r\n";
     
-    constexpr char HTTP_OK_PREFIX[] = 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: ";
-    
     constexpr char HTTP_NOT_FOUND[] = 
         "HTTP/1.1 404 Not Found\r\n"
         "Content-Type: text/html\r\n"
@@ -119,8 +115,8 @@ void Sse_server::shutdown_in_io_thread() {
         client->close();
     }
 
+    // main() reports the shutdown once both threads are gone.
     io_context_.stop();
-    LOG_INFO("SSE server stopped.\n");
 }
 
 void Sse_server::start_accept() {
@@ -384,17 +380,4 @@ std::string Sse_server::format_sse_event(const std::string& message) {
     }
     result += SSE_EVENT_SUFFIX;
     return result;
-}
-
-std::string Sse_server::get_content_type(const std::string& path) {
-    if (path.find(".html") != std::string::npos || path == "/") {
-        return "text/html";
-    } else if (path.find(".js") != std::string::npos) {
-        return "application/javascript";
-    } else if (path.find(".css") != std::string::npos) {
-        return "text/css";
-    } else if (path.find(".json") != std::string::npos) {
-        return "application/json";
-    }
-    return "text/plain";
 }

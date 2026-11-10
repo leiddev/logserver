@@ -96,7 +96,6 @@ class Sse_server {
     void shutdown_in_io_thread();
 
     std::string format_sse_event(const std::string& message);
-    std::string get_content_type(const std::string& path);
 
     asio::io_context io_context_;
     asio::ip::tcp::acceptor acceptor_;
