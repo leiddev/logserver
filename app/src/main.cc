@@ -84,6 +84,16 @@ int main(int argc, char *argv[]) {
   disp_msg = cmdl.exist("disp_msg");
   LOG_INFO("Display message: {}\n", disp_msg);
 
+  // State the web server type and port up front: the type is a build time
+  // choice, so the startup log is the only place it can be seen.
+#if ENABLE_WEB_SERVER == 1
+  LOG_INFO("Web server: WebSocket mode on port {}\n", web_server_port);
+#elif ENABLE_WEB_SERVER == 2
+  LOG_INFO("Web server: SSE mode on port {}\n", web_server_port);
+#else
+  LOG_INFO("Web server: disabled\n");
+#endif
+
   try {
     asio::io_context io_context;
 
