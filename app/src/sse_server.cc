@@ -7,6 +7,8 @@
  */
 #include "sse_server.hh"
 
+#include "text_encoding.hh"
+
 namespace {
     constexpr char SSE_RESPONSE_HEADERS[] = 
         "HTTP/1.1 200 OK\r\n"
@@ -222,7 +224,9 @@ void Sse_server::broadcast_message(const std::string& message) {
 
     std::vector<std::weak_ptr<SseClient>> clients_to_remove;
 
-    auto sse_data = std::make_shared<std::string>(format_sse_event(message));
+    // EventSource always decodes the stream as UTF-8, so a line that arrives
+    // in GB2312 has to be converted here or the browser shows mojibake.
+    auto sse_data = std::make_shared<std::string>(format_sse_event(textenc::toDisplayUtf8(message)));
 
     {
         std::lock_guard<std::mutex> lock(clients_mutex_);

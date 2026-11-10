@@ -26,6 +26,13 @@ import time
 
 TIMEOUT = 10.0
 
+# "测试中文日志" in both encodings. Log producers here usually send UTF-8, but
+# GB2312 and plain garbage reach the server too, so both paths are exercised.
+GB2312_CHINESE = b"\xb2\xe2\xca\xd4\xd6\xd0\xce\xc4\xc8\xd5\xd6\xbe"
+GB2312_CHINESE_UTF8 = b"\xe6\xb5\x8b\xe8\xaf\x95\xe4\xb8\xad\xe6\x96\x87\xe6\x97\xa5\xe5\xbf\x97"
+INVALID_UTF8 = b"\xe6\xb5\x8b\xe8"  # neither valid UTF-8 nor valid GB2312
+REPLACEMENT = b"\xef\xbf\xbd"        # U+FFFD
+
 
 def free_port(sock_type):
     """Ask the OS for an unused port of the given socket type."""
@@ -173,6 +180,18 @@ def main():
             payload = recv_until(sse, b"data: sse-b", 5)
             check(b"data: sse-a\ndata: sse-b\n" in payload,
                   "SSE receives one data: line per log line")
+
+            # GB2312 must arrive as UTF-8: EventSource always decodes as UTF-8.
+            udp.sendto(GB2312_CHINESE + b"\n", ("127.0.0.1", udp_port))
+            gb_event = recv_until(sse, GB2312_CHINESE_UTF8, 5)
+            check(GB2312_CHINESE_UTF8 in gb_event,
+                  "SSE converts a GB2312 line to UTF-8 for the browser")
+            try:
+                gb_event.decode("utf-8")
+                decodes = True
+            except UnicodeDecodeError:
+                decodes = False
+            check(decodes, "SSE GB2312 event is valid UTF-8")
             sse.close()
         elif web_type == "WEBSOCKET":
             status = websocket_handshake(web_port)
