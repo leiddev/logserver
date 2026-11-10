@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.8] - 2026-11-10
+
 ### Fixed
 
 - WebSocket 模式下，一个不读数据的浏览器会让 websocketpp 的发送队列持续增长，进程内存随之上涨。现在广播时检查每个连接的待发字节数，超过 4 MB 即以 `policy_violation` 关闭该连接并移出订阅列表，与 SSE 侧的上限一致。
@@ -214,7 +216,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.7...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.8...HEAD
+[V0.8.8]: https://github.com/leiddev/logserver/releases/tag/v0.8.8
 [V0.8.7]: https://github.com/leiddev/logserver/releases/tag/v0.8.7
 [V0.8.6]: https://github.com/leiddev/logserver/releases/tag/v0.8.6
 [V0.8.5]: https://github.com/leiddev/logserver/releases/tag/v0.8.5
