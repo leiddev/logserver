@@ -84,7 +84,7 @@ cmake -S . -B build -DWEBSERVER_TYPE=WEBSOCKET
 （Linux 下均为静态链接使用，各库许可证详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）
 
 - [cmdline](3rdparty/cmdline)：命令行参数解析库（BSD 3-Clause）；
-- [unicode_utility](3rdparty/unicode_utility)：GB2312 与 UTF-8 转换库（ISC）；
+- [gbcodec](3rdparty/gbcodec)：GB2312 与 UTF-8 转换库（ISC）；
 - [asio](3rdparty/asio)：异步 IO 库（Boost Software License 1.0）；
 - [WebSocket++](3rdparty/websocketpp)：WebSocket 协议库，依赖 asio（BSD 3-Clause）。
 
@@ -108,7 +108,7 @@ config/         systemd 服务配置示例
 
 ## 程序编译方式
 
-使用 CMake 生成编译配置，CMake 版本至少应该为 3.10。
+使用 CMake 生成编译配置，CMake 版本至少应该为 3.15。
 
 ### 预编译版本
 

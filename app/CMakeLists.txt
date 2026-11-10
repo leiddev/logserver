@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 
 # The LogServer executable and the applog library it links.
 project(${PROJECT_NAME} VERSION 1.0.0 LANGUAGES CXX)
@@ -52,7 +52,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_WEB_SERVER=${ENABLE_WE
 target_link_libraries(
     ${PROJECT_NAME}
     applog
-    unicode_utility
+    gbcodec
     cmdline
     websocketpp
     asio

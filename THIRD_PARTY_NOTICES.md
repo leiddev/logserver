@@ -30,11 +30,12 @@ LogServer 在 `3rdparty/` 目录下附带以下第三方库。这些库按原样
 
 用于 `WEBSERVER_TYPE=WEBSOCKET` 构建下的 WebSocket 服务。
 
-## unicode_utility
+## gbcodec 1.2.1
 
-- 位置：`3rdparty/unicode_utility/`
-- 版权：Copyright (c) 2023-2023 Leid
+- 位置：`3rdparty/gbcodec/`
+- 版权：Copyright (c) 2016-2026 leid
 - 许可证：ISC
-- 许可证文本：`3rdparty/unicode_utility/README.md` 的 "LICENSE" 一节
+- 许可证文本：`3rdparty/gbcodec/LICENSE`
 
-用于 WebSocket 推送时将 GB2312 日志转换为 UTF-8。
+用于 WebSocket 与 SSE 推送时把 GB2312 日志转换为 UTF-8。支持有损转换：无法映射的
+字符由调用者指定码点替代，不会静默丢字节。

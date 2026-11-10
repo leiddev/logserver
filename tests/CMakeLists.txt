@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: MIT
+#
+# Tests are registered with CTest; no third party test framework is used.
+cmake_minimum_required(VERSION 3.15)
 
 # app_log unit tests: formatting, file writes, rotation and recovery.
 add_executable(app_log_test app_log_test.cc)

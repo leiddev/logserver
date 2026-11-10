@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 
 # LogServer: UDP log collector with TCP, SSE and WebSocket front ends.
 # This file drives the build for every supported platform; the toolchain
@@ -7,6 +7,14 @@ cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMAKE_VERSION = ${CMAKE_VERSION}")
 
 project(LogServer VERSION 1.0.0)
+
+# Single configuration generators leave the build type empty, which means no
+# optimisation flags at all. Default to Release so a plain `cmake ..` produces
+# an optimised binary; gbcodec makes the same choice for the same reason.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+endif()
 
 # Echo every compiler and linker invocation.
 set(CMAKE_VERBOSE_MAKEFILE ON)

@@ -4,7 +4,7 @@
 
 ## 构建
 
-需要 CMake 3.10 或以上版本：
+需要 CMake 3.15 或以上版本：
 
 ```
 cmake -S . -B build

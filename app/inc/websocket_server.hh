@@ -29,7 +29,7 @@
 #include <iostream>
 #include <set>
 
-#include <unicode_utility_cpp.h>
+#include <gbcodec/gbcodec.hpp>
 #include "common.h"
 #include "html_page.hh"
 
@@ -267,8 +267,14 @@ class Websocket_server {
             if (e.code().value() == websocketpp::processor::error::invalid_payload) {
               // The payload is not valid UTF-8, which a text frame requires.
               // Producers on this platform log in GB2312, so convert and retry.
-              std::string no_utf8_str = a.str;
-              std::string utf8_str = UnicodeUtility::GB2312ToUTF8(no_utf8_str);
+              // Keep the original bytes if the conversion itself fails.
+              const std::string no_utf8_str = a.str;
+              std::string utf8_str = no_utf8_str;
+              try {
+                utf8_str = gbcodec::from_gb2312(no_utf8_str, U'\uFFFD');
+              } catch (const gbcodec::error &conversion_error) {
+                LOG_ERR("GB2312 conversion failed: {}\n", conversion_error.what());
+              }
               try {
                 m_server.send(hdl, utf8_str, websocketpp::frame::opcode::text);
               } catch (websocketpp::exception const& e) {

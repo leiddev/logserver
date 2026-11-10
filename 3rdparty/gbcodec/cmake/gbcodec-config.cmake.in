@@ -1,0 +1,12 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/gbcodec-targets.cmake")
+
+# The C++ wrapper is optional; report it to the consumer.
+if(TARGET gbcodec::gbcodec_cpp)
+    set(gbcodec_CXX_AVAILABLE TRUE)
+else()
+    set(gbcodec_CXX_AVAILABLE FALSE)
+endif()
+
+check_required_components(gbcodec)
