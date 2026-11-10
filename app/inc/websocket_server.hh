@@ -213,12 +213,14 @@ class Websocket_server {
       con->set_status(websocketpp::http::status_code::ok);
     } else {
       con->set_status(websocketpp::http::status_code::not_found);
+      // The resource came from the request and is echoed into the page, so it
+      // has to be escaped before it reaches the browser.
       auto error_page = R"xxx(
 <!DOCTYPE html>
 <title>Error 404 (Resource not found)</title>
 <h1>Error 404</h1>
 <p>The requested file <code>
-)xxx" + resource + R"xxx(
+)xxx" + htmlEscape(resource) + R"xxx(
 </code> was not found.</p>
 )xxx";
       con->set_body(error_page);

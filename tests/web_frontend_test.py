@@ -473,6 +473,17 @@ def check_sse_request_limits(ctx):
               "the SSE server still serves the log page after an oversized request")
 
 
+def check_404_escaped(ctx):
+    """The path echoed into the 404 page must not reach the browser as markup."""
+    conn = socket.create_connection(("127.0.0.1", ctx.server.web_port), timeout=5)
+    conn.sendall(b"GET /<script>alert(1)</script> HTTP/1.1\r\nHost: x\r\n\r\n")
+    data, _ = read_until_close(conn, 5)
+    conn.close()
+    ctx.check(data.startswith(b"HTTP/1.1 404"), "an unknown path is answered with 404")
+    ctx.check(b"<script>" not in data, "the 404 page does not echo the path as markup")
+    ctx.check(b"&lt;script&gt;" in data, "the 404 page shows the escaped path")
+
+
 # ---------------------------------------------------------------------------
 # WebSocket checks
 # ---------------------------------------------------------------------------
@@ -655,12 +666,14 @@ def main():
             check_sse_large_line(ctx)
             check_sse_malformed_requests(ctx)
             check_sse_request_limits(ctx)
+            check_404_escaped(ctx)
         else:
             check_ws_fanout(ctx)
             check_ws_ignores_input(ctx)
             check_ws_slow_consumer(ctx)
             check_ws_churn(ctx)
             check_ws_bad_handshake(ctx)
+            check_404_escaped(ctx)
     finally:
         output = server.output()
         server.stop()

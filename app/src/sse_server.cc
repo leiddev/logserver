@@ -249,7 +249,7 @@ void Sse_server::send_http_page(std::shared_ptr<SseClient> client, const std::st
 
 void Sse_server::send_404(std::shared_ptr<SseClient> client, const std::string& resource) {
     std::string body = "<!DOCTYPE html><title>Error 404</title><h1>Error 404</h1><p>Resource not found: ";
-    body += resource;
+    body += htmlEscape(resource);
     body += "</p>";
 
     std::string response = HTTP_NOT_FOUND;
