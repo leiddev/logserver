@@ -432,6 +432,47 @@ def check_sse_malformed_requests(ctx):
               "the SSE server still serves the log page after malformed requests")
 
 
+def read_until_close(conn, timeout):
+    """Read until the peer closes, returning the bytes and whether it closed."""
+    data = b""
+    deadline = time.time() + timeout
+    conn.settimeout(timeout)
+    while time.time() < deadline:
+        conn.settimeout(max(0.01, deadline - time.time()))
+        try:
+            chunk = conn.recv(65536)
+        except socket.timeout:
+            return data, False
+        except OSError:
+            return data, True
+        if not chunk:
+            return data, True
+        data += chunk
+    return data, False
+
+
+def check_sse_request_limits(ctx):
+    """A request that never ends must not hold a connection for ever."""
+    stalled = socket.create_connection(("127.0.0.1", ctx.server.web_port), timeout=5)
+    stalled.sendall(b"GET / HTTP/1.1\r\n")
+    data, closed = read_until_close(stalled, 15)
+    stalled.close()
+    ctx.check(closed, "the server closes a connection whose request never ends")
+
+    # 9 KB of path is well past the header limit and contains no blank line.
+    oversized = socket.create_connection(("127.0.0.1", ctx.server.web_port), timeout=5)
+    oversized.sendall(b"GET /" + b"a" * 9000 + b" HTTP/1.1\r\nHost: x\r\n\r\n")
+    data, closed = read_until_close(oversized, 10)
+    oversized.close()
+    ctx.check(data.startswith(b"HTTP/1.1 431"),
+              "an oversized request header is answered with 431")
+    ctx.check(closed, "the connection is closed after an oversized request header")
+
+    page = http_get(ctx.server.web_port)
+    ctx.check(page.startswith(b"HTTP/1.1 200"),
+              "the SSE server still serves the log page after an oversized request")
+
+
 # ---------------------------------------------------------------------------
 # WebSocket checks
 # ---------------------------------------------------------------------------
@@ -613,6 +654,7 @@ def main():
             check_sse_abrupt_disconnect(ctx)
             check_sse_large_line(ctx)
             check_sse_malformed_requests(ctx)
+            check_sse_request_limits(ctx)
         else:
             check_ws_fanout(ctx)
             check_ws_ignores_input(ctx)

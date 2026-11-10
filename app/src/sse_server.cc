@@ -41,6 +41,15 @@ namespace {
     // closed. A browser reading normally never gets near this; one that
     // stopped reading reaches it in a few seconds of busy logging.
     constexpr std::size_t SSE_MAX_QUEUED_BYTES = 4 * 1024 * 1024;
+
+    // A request header is a "GET <path> HTTP/1.1" line and a handful of
+    // fields; anything larger is not a browser, and the read stops there
+    // instead of growing the buffer until the process runs out of memory.
+    constexpr std::size_t SSE_MAX_REQUEST_BYTES = 8 * 1024;
+
+    // A client that connects and then sends nothing, or stops half way
+    // through the request line, would otherwise hold the connection forever.
+    constexpr int SSE_REQUEST_TIMEOUT_SECONDS = 10;
 }
 
 Sse_server::Sse_server()
@@ -120,7 +129,9 @@ void Sse_server::start_accept() {
     acceptor_.async_accept(client->socket,
         [this, client](const std::error_code& ec) {
             if (!ec) {
-                auto buffer = std::make_shared<asio::streambuf>();
+                start_request_timeout(client);
+
+                auto buffer = std::make_shared<asio::streambuf>(SSE_MAX_REQUEST_BYTES);
                 asio::async_read_until(client->socket, *buffer, "\r\n\r\n",
                     [this, client, buffer](const std::error_code& ec2, std::size_t bytes) {
                         handle_read_request(client, buffer, ec2, bytes);
@@ -132,12 +143,39 @@ void Sse_server::start_accept() {
         });
 }
 
+void Sse_server::start_request_timeout(std::shared_ptr<SseClient> client) {
+    client->timer.expires_after(std::chrono::seconds(SSE_REQUEST_TIMEOUT_SECONDS));
+    client->timer.async_wait(
+        [this, client](const std::error_code& timer_ec) {
+            if (timer_ec || client->request_received) return;
+            LOG_ERR("SSE client sent no request in time, closing it\n");
+            remove_client(client);
+        });
+}
+
 void Sse_server::handle_read_request(std::shared_ptr<SseClient> client,
                                       std::shared_ptr<asio::streambuf> buffer,
                                       const std::error_code& ec,
                                       std::size_t /*bytes_transferred*/) {
+    client->request_received = true;
+    client->timer.cancel();
+
     if (ec) {
-        LOG_ERR("SSE read request error: {}\n", ec.message());
+        // The timeout or the shutdown may have closed the socket first; the
+        // read then fails with whatever the platform reports for a dead
+        // descriptor, and there is nothing left to answer.
+        if (!client->socket.is_open()) return;
+
+        if (ec == asio::error::not_found) {
+            // The buffer filled up without ever reaching the blank line that
+            // ends the header.
+            LOG_ERR("SSE request header exceeds {} bytes, closing the client\n", SSE_MAX_REQUEST_BYTES);
+            client->close_after_write = true;
+            enqueue(client, "HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
+        } else if (ec != asio::error::operation_aborted) {
+            LOG_ERR("SSE read request error: {}\n", ec.message());
+            remove_client(client);
+        }
         return;
     }
 

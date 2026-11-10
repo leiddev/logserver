@@ -45,9 +45,15 @@ struct SseClient : public std::enable_shared_from_this<SseClient> {
     std::size_t queued_bytes;
     bool is_writing;
     bool close_after_write;
+    bool request_received;
 
     SseClient(asio::io_context& io_ctx)
-        : socket(io_ctx), timer(io_ctx), queued_bytes(0), is_writing(false), close_after_write(false) {}
+        : socket(io_ctx),
+          timer(io_ctx),
+          queued_bytes(0),
+          is_writing(false),
+          close_after_write(false),
+          request_received(false) {}
 
     // Cancel the heartbeat and close the socket. Call from the io_context
     // thread only; the queued messages stay alive until the client is gone so
@@ -76,6 +82,7 @@ class Sse_server {
 
  private:
     void start_accept();
+    void start_request_timeout(std::shared_ptr<SseClient> client);
     void handle_read_request(std::shared_ptr<SseClient> client,
                              std::shared_ptr<asio::streambuf> buffer,
                              const std::error_code& ec, std::size_t bytes_transferred);
