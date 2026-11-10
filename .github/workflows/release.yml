@@ -1,0 +1,106 @@
+name: Release
+
+# Build the Windows x64 and Linux x64 binaries and attach them to the GitHub
+# release for the pushed tag. A manual run builds and tests only, without
+# touching any release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Linux x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DEXAMPLE=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^#define APP_VERSION_STR *"\(.*\)"/\1/p' app/inc/common.h)
+          stage="LogServer-${version}-linux-x64"
+          mkdir -p "dist/${stage}"
+          cp build/out/app/LogServer "dist/${stage}/"
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md "dist/${stage}/"
+          (cd "dist/${stage}" && sha256sum LogServer > SHA256SUMS)
+          tar -C dist -czf "dist/${stage}.tar.gz" "${stage}"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: dist/*.tar.gz
+
+  build-windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DEXAMPLE=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $line = Select-String -Path app/inc/common.h -Pattern '#define\s+APP_VERSION_STR\s+"(.*)"'
+          $version = $line.Matches[0].Groups[1].Value
+          $stage = "LogServer-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path "dist/$stage" | Out-Null
+          Copy-Item "build/out/app/Release/LogServer.exe" "dist/$stage/"
+          Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md, CHANGELOG.md "dist/$stage/"
+          $hash = (Get-FileHash "dist/$stage/LogServer.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  LogServer.exe" | Out-File -Encoding ascii "dist/$stage/SHA256SUMS"
+          Compress-Archive -Path "dist/$stage" -DestinationPath "dist/$stage.zip"
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*.zip
+
+  publish:
+    name: Attach binaries to the release
+    needs: [build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # The release is normally created by hand with the notes; create a
+          # minimal one only when the tag was pushed without it.
+          gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1 || \
+            gh release create "${tag}" --repo "${GITHUB_REPOSITORY}" \
+              --title "LogServer ${tag}" --generate-notes
+          gh release upload "${tag}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
