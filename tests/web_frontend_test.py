@@ -17,8 +17,8 @@ This file attacks the parts that only show up over time or under load:
   * several clients get every event, and one going away does not disturb the
     others;
   * malformed HTTP requests get 400 and the server keeps serving;
-  * WebSocket clients get every broadcast, text frames are echoed, and
-    connecting/disconnecting during a flood does not take the server down.
+  * WebSocket clients get every broadcast, data frames they send are dropped,
+    and connecting/disconnecting during a flood does not take the server down.
 
 The slow-consumer and event-integrity checks failed against V0.8.6 and guard
 the fixes made since; the rest cover behaviour that must not regress.
@@ -452,15 +452,27 @@ def check_ws_fanout(ctx):
         sock.close()
 
 
-def check_ws_echo(ctx):
+def check_ws_ignores_input(ctx):
+    """The log stream is one way: a data frame from a client is dropped.
+
+    Dropping it must not cost the client its connection, so the check sends a
+    frame and then verifies that no echo comes back and that broadcasts still
+    arrive on the same socket.
+    """
     sock = ctx.server.ws_connect()
-    ctx.check(sock is not None, "WebSocket echo client connects")
+    ctx.check(sock is not None, "WebSocket input client connects")
     if sock is None:
         return
     time.sleep(0.2)
-    ws_send_text(sock, b"echo-payload")
-    payload = ws_read_until(sock, lambda frame: frame == b"echo-payload", 5)
-    ctx.check(payload == b"echo-payload", "a text frame is echoed back")
+    ws_send_text(sock, b"ignore-me")
+    echoed = ws_read_frame(sock, 2.0)
+    ctx.check(echoed is None, "a text frame from the client is not echoed back")
+
+    expected = b"AFTER-INPUT\n"
+    ctx.server.send_log(expected)
+    payload = ws_read_until(sock, lambda frame: frame == expected, 5)
+    ctx.check(payload == expected,
+              "the client still receives broadcasts after sending a data frame")
     sock.close()
 
 
@@ -567,7 +579,7 @@ def main():
             check_sse_malformed_requests(ctx)
         else:
             check_ws_fanout(ctx)
-            check_ws_echo(ctx)
+            check_ws_ignores_input(ctx)
             check_ws_churn(ctx)
             check_ws_bad_handshake(ctx)
     finally:

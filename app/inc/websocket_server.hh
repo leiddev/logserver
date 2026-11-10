@@ -4,8 +4,9 @@
  *
  * WebSocket front end, used when the server is built with
  * WEBSERVER_TYPE=WEBSOCKET. Serves the log viewer page at "/" and pushes new
- * log lines to every connected browser. Incoming text frames are echoed and
- * logged; frames that are not valid UTF-8 are converted from GB2312 first.
+ * log lines to every connected browser. The stream is one way: data frames a
+ * client sends are dropped, only the control frames (ping, pong, close) that
+ * the protocol needs are handled.
  */
 #pragma once
 #ifndef _WEBSOCKET_SERVER_HH_
@@ -40,7 +41,6 @@ typedef websocketpp::server<websocketpp::config::asio> websocketserver;
 using websocketpp::connection_hdl;
 using websocketpp::lib::bind;
 using websocketpp::lib::placeholders::_1;
-using websocketpp::lib::placeholders::_2;
 
 using websocketpp::lib::condition_variable;
 using websocketpp::lib::lock_guard;
@@ -49,21 +49,18 @@ using websocketpp::lib::thread;
 using websocketpp::lib::unique_lock;
 
 // Work items handed from the websocketpp callbacks to the processing thread:
-// SUBSCRIBE/UNSUBSCRIBE track the client set, MESSAGE echoes a frame back,
-// BROADCAST sends a log line to every client, STOP shuts the server down.
-enum action_type { SUBSCRIBE, UNSUBSCRIBE, MESSAGE, STOP, BROADCAST };
+// SUBSCRIBE/UNSUBSCRIBE track the client set, BROADCAST sends a log line to
+// every client, STOP shuts the server down.
+enum action_type { SUBSCRIBE, UNSUBSCRIBE, STOP, BROADCAST };
 
 struct action {
   action(action_type t, connection_hdl h) : type(t), hdl(h) {
-  }
-  action(action_type t, connection_hdl h, websocketserver::message_ptr m) : type(t), hdl(h), msg(m) {
   }
   action(action_type t, connection_hdl h, std::string m) : type(t), hdl(h), str(m) {
   }
 
   action_type type;
   websocketpp::connection_hdl hdl;
-  websocketserver::message_ptr msg;
   const std::string str;
 };
 
@@ -84,10 +81,12 @@ class Websocket_server {
     m_server.init_asio();
     m_server.set_reuse_addr(true);
 
-    // Register handler callbacks
+    // Register handler callbacks. No message handler is registered: the log
+    // stream is one way, and websocketpp drops data frames when no handler is
+    // set. Control frames (ping, pong, close) are handled by the library
+    // itself, so the keepalive and the closing handshake keep working.
     m_server.set_open_handler(bind(&Websocket_server::on_open, this, ::_1));
     m_server.set_close_handler(bind(&Websocket_server::on_close, this, ::_1));
-    m_server.set_message_handler(bind(&Websocket_server::on_message, this, ::_1, ::_2));
     m_server.set_fail_handler(bind(&Websocket_server::on_fail, this, ::_1));
     m_server.set_http_handler(bind(&Websocket_server::on_http, this, ::_1));
   }
@@ -168,20 +167,6 @@ class Websocket_server {
     m_action_cond.notify_one();
   }
 
-  // websocketpp callback: the browser sent a frame; log it and queue an echo.
-  void on_message(connection_hdl hdl, websocketserver::message_ptr msg) {
-    {
-      lock_guard<mutex> guard(m_action_lock);
-      m_actions.push(action(MESSAGE, hdl, msg));
-      if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-        LOG_INFO("Websocket client on_message: {}\n", msg->get_payload());
-      } else if (msg->get_opcode() == websocketpp::frame::opcode::binary) {
-        LOG_INFO("Websocket client on_message: hex({})\n", msg->get_payload().size());
-      }
-    }
-    m_action_cond.notify_one();
-  }
-
   // websocketpp callback: the handshake or the transport failed.
   void on_fail(connection_hdl hdl) {
     websocketserver::connection_ptr con = m_server.get_con_from_hdl(hdl);
@@ -257,9 +242,6 @@ class Websocket_server {
         lock_guard<mutex> guard(m_connection_lock);
         m_connections.erase(a.hdl);
         m_subscriber_count.store(m_connections.size(), std::memory_order_relaxed);
-      } else if (a.type == MESSAGE) {
-        lock_guard<mutex> guard(m_connection_lock);
-        m_server.send(a.hdl, a.msg);
       } else if (a.type == STOP) {
         lock_guard<mutex> guard(m_connection_lock);
         // The exception free overloads keep the error inside this branch: an
