@@ -12,7 +12,7 @@
 namespace {
     constexpr char SSE_RESPONSE_HEADERS[] = 
         "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/event-stream\r\n"
+        "Content-Type: text/event-stream; charset=utf-8\r\n"
         "Cache-Control: no-cache\r\n"
         "Connection: keep-alive\r\n"
         "Access-Control-Allow-Origin: *\r\n"
@@ -143,7 +143,7 @@ void Sse_server::handle_read_request(std::shared_ptr<SseClient> client,
         send_sse_headers(client);
         LOG_INFO("SSE client connected from {}\n", client->socket.remote_endpoint().address().to_string());
     } else if (resource == "/" || resource == "/index.html") {
-        send_http_page(client, get_sse_log_page_html(), "text/html");
+        send_http_page(client, get_sse_log_page_html(), "text/html; charset=utf-8");
     } else {
         send_404(client, resource);
     }
@@ -189,7 +189,7 @@ void Sse_server::send_404(std::shared_ptr<SseClient> client, const std::string& 
     *response += "</p>";
 
     std::string header = "HTTP/1.1 404 Not Found\r\n";
-    header += "Content-Type: text/html\r\n";
+    header += "Content-Type: text/html; charset=utf-8\r\n";
     header += "Content-Length: " + std::to_string(response->size()) + "\r\n";
     header += "Connection: close\r\n\r\n";
     *response = header + *response;

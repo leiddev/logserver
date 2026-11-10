@@ -188,7 +188,7 @@ class Websocket_server {
 
     if (resource == "/") {
       std::string body = get_ws_log_page_html();
-      con->append_header("Content-Type", "text/html");
+      con->append_header("Content-Type", "text/html; charset=utf-8");
       con->set_body(body);
       con->set_status(websocketpp::http::status_code::ok);
     } else {

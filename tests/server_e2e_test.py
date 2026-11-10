@@ -212,12 +212,16 @@ def main():
             page = fetch_page(web_port)
             check(page.startswith(b"HTTP/1.1 200") and b"</html>" in page,
                   "web server serves the log page at /")
+            check(b"charset=utf-8" in page.split(b"\r\n\r\n", 1)[0].lower(),
+                  "the log page declares its charset")
 
         if web_type == "SSE":
             sse = socket.create_connection(("127.0.0.1", web_port), timeout=5)
             sse.sendall(b"GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
             headers = recv_until(sse, b"\r\n\r\n", 5)
             check(headers.startswith(b"HTTP/1.1 200"), "SSE endpoint returns 200")
+            check(b"charset=utf-8" in headers.lower(),
+                  "SSE event stream declares its charset")
             udp.sendto(b"sse-a\nsse-b\n", ("127.0.0.1", udp_port))
             payload = recv_until(sse, b"data: sse-b", 5)
             check(b"data: sse-a\ndata: sse-b\n" in payload,
