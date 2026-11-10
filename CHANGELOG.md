@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- SSE 向浏览器推送时在 UDP 接收线程上做阻塞写：一个不读数据的浏览器把发送缓冲填满后，UDP 接收、TCP 转发与日志落盘全部停住，SIGINT 也无法处理。现在每个客户端有独立的发送队列，写入只在 SSE 自己的 io_context 线程进行；某个客户端累计积压超过 4 MB 视为掉线并被关闭，其余客户端不受影响。
+- SSE 同一连接存在两条写路径（广播的阻塞写与心跳的异步写），心跳可能插进一条大日志中间，破坏事件分帧。现在所有写出都经过同一个队列。
+- SSE 在响应头写出之前就把客户端加入推送列表，首个事件可能抢在 HTTP 头之前。现在只在 EventSource 请求确定后注册并排队。
+- WebSocket 广播线程无锁读取订阅者集合，与处理线程的增删形成数据竞争（未定义行为，客户端上下线时触发）。订阅者集合现在只在处理线程访问。
+- WebSocket 在 `run()` 未能监听（如 Web 端口被占用）时收到 SIGINT 会挂死：STOP 分支异常路径二次解锁连接锁且不退出处理循环，主线程 `join()` 永不返回。现在改用免异常重载并保证循环退出，重复调用 `stop()` 安全。
+- WebSocket 的 `is_listening()` 从 UDP 线程读取 websocketpp 的内部状态，与工作线程的启停形成数据竞争。改为由服务器自己维护的原子标志。
+
+### Added
+
+- `tests/web_frontend_test.py`：SSE/WebSocket 的稳定性与健壮性用例——停滞消费者不阻塞转发、积压超限被剔除、事件完整有序、客户端中途断开、畸形请求、连接抖动。
+- `tests/websocket_stop_test.cc`、`tests/websocket_broadcast_race_test.cc`：停止流程与广播竞态的回归用例，后者由 `-DLOG_SERVER_TSAN_TESTS=ON` 构建并由 CI 单独运行。
+
 ## [V0.8.6] - 2026-11-10
 
 ### Fixed
