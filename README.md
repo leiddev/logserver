@@ -110,6 +110,15 @@ config/         systemd 服务配置示例
 
 使用 CMake 生成编译配置，CMake 版本至少应该为 3.10。
 
+### 预编译版本
+
+[Releases](https://github.com/leiddev/logserver/releases) 页面提供 Windows x64 与 Linux x64 的预编译包，内含可执行文件、README、LICENSE、第三方声明、CHANGELOG 与 `SHA256SUMS`。
+
+- **Linux x64**：在 glibc 2.28 环境构建并静态链接 libstdc++，可在麒麟 V10（glibc 2.31）、Debian 11 等较旧发行版上运行；
+- **Windows x64**：MSVC 2022 构建。
+
+ARM 平台（含 Hi3516）没有预编译包，请按下文自行交叉编译。
+
 ### 通用方式
 
 ```
