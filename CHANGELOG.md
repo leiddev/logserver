@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.12] - 2026-11-11
+
 ### Added
 
 - 新增浏览器级 UI 测试 `web_ui`：用 Playwright 驱动真实 Chromium 打开内置页面，覆盖状态圆点与启动/停止按钮、逐行渲染与 HTML 转义、60 KB 长行、清空（含尚未刷新的批次）、10000 行上限与 10 万行后的 DOM 及 JavaScript 堆稳定、自动滚动、保存下载、关于对话框，以及服务端消失后的三次重连与放弃。默认关闭，配置时加 `-DLOG_SERVER_UI_TESTS=ON`；CI 在 SSE 与 WebSocket 两种构建上运行。
@@ -266,7 +268,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.11...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.12...HEAD
+[V0.8.12]: https://github.com/leiddev/logserver/releases/tag/v0.8.12
 [V0.8.11]: https://github.com/leiddev/logserver/releases/tag/v0.8.11
 [V0.8.10]: https://github.com/leiddev/logserver/releases/tag/v0.8.10
 [V0.8.9]: https://github.com/leiddev/logserver/releases/tag/v0.8.9
