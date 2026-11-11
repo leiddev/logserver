@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.11] - 2026-11-11
+
 ### Changed
 
 - Web 前端改用一套克制的配色：一个中性面、一个强调色和一个危险色，按钮按层级区分而不是各自一种实心色。启动是页面上唯一的实心按钮，停止为红色描边，自动滚动开启时浅蓝底、关闭时中性灰，清空与保存为中性，关于为无边框文字按钮。
@@ -255,7 +257,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.10...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.11...HEAD
+[V0.8.11]: https://github.com/leiddev/logserver/releases/tag/v0.8.11
 [V0.8.10]: https://github.com/leiddev/logserver/releases/tag/v0.8.10
 [V0.8.9]: https://github.com/leiddev/logserver/releases/tag/v0.8.9
 [V0.8.8]: https://github.com/leiddev/logserver/releases/tag/v0.8.8
