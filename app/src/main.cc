@@ -34,7 +34,7 @@ static bool disp_msg = true;
 static bool log_msg = false;
 
 int main(int argc, char *argv[]) {
-  const std::string app_name{"LogServer"};
+  const std::string app_name{APP_NAME};
 
   cmdline::parser cmdl;
   cmdl.add<int>("udp_port", 'u', "UDP port number", false, 11000, cmdline::range(1, 65535));

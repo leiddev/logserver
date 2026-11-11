@@ -1,0 +1,65 @@
+u8R"xxx(
+        // ---- WebSocket transport ----
+        // The log page is served over the same connection family as the
+        // endpoint, so the URL takes the page's scheme and host: an https page
+        // talks wss, a plain one ws.
+        const transportName = "WebSocket";
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${wsProtocol}${window.location.host}`;
+        let ws = null;
+
+        function isConnected() {
+            return ws !== null && ws.readyState !== WebSocket.CLOSED;
+        }
+
+        function connect() {
+            if (isConnected()) return;
+
+            manualClose = false;
+            appendLog(transportName + " 正在连接 " + wsUrl + " ...", "info");
+            updateStatus("连接中...");
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                appendLog(transportName + " 连接成功", "info");
+                updateConnectButton(true);
+                updateStatus("已连接");
+                retryCount = 0;
+            };
+
+            ws.onmessage = (event) => {
+                let logType = "normal";
+                const msg = event.data.toLowerCase();
+                if (msg.includes("critical") ||
+                    msg.includes("warning") ||
+                    msg.includes("error")) {
+                    logType = "error";
+                }
+                appendLog(event.data, logType);
+            };
+
+            ws.onerror = () => {
+                appendLog(transportName + " 发生错误", "error");
+            };
+
+            ws.onclose = (event) => {
+                // A clean close is reported as information, anything else as an error
+                if (event.wasClean) {
+                    appendLog(transportName + " 连接已经关闭", "info");
+                    manualClose = true;
+                } else {
+                    appendLog(transportName + " 异常关闭: " + event.code, "error");
+                }
+                updateConnectButton(false);
+                updateStatus("已断开");
+                scheduleReconnect();
+            };
+        }
+
+        function disconnect() {
+            if (!ws) return;
+            manualClose = true;
+            ws.close(1000, 'Normal Closure');
+            appendLog(transportName + " 请求关闭连接", "info");
+        }
+)xxx"

@@ -47,9 +47,9 @@ class Session : public std::enable_shared_from_this<Session> {
       stop();
       return;
     }
-    std::string welocme_info = "Welcome to LogServer(" APP_VERSION_STR ")! Your IP is " +
-                              endpoint_.address().to_string() + "\n";
-    deliver(welocme_info);
+    std::string welcome_info = "Welcome to " APP_NAME "(" APP_VERSION_STR ")! Your IP is " +
+                               endpoint_.address().to_string() + "\n";
+    deliver(welcome_info);
     do_read();
   }
 

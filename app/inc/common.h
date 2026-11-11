@@ -2,15 +2,16 @@
 /*
  * Leid 2025.2
  *
- * Project wide definitions shared by every translation unit: the version
- * string, the LOG_* macros that route messages through applog, and the
- * argument checking helpers.
+ * Project wide definitions shared by every translation unit: the application
+ * name and version string, the LOG_* macros that route messages through
+ * applog, and the argument checking helpers.
  */
 #ifndef _APP_COMMON_H_
 #define _APP_COMMON_H_
 
 #include "app_log.hh"
 
+#define APP_NAME             "LogServer"
 #define APP_VERSION_STR      "V0.8.9"
 
 // Internal messages carry the [APP] prefix so they can be told apart from the

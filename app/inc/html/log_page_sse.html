@@ -1,0 +1,63 @@
+u8R"xxx(
+        // ---- SSE transport ----
+        // The page is served by the SSE front end, so the stream is a relative
+        // path on the same host and EventSource handles the reconnection
+        // itself only when the server closes; the page owns the retry policy.
+        const transportName = "SSE";
+        const sseUrl = "/sse";
+        let eventSource = null;
+
+        function isConnected() {
+            return eventSource !== null;
+        }
+
+        function connect() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            manualClose = false;
+            appendLog(transportName + " 正在连接 " + sseUrl + " ...", "info");
+            updateStatus("连接中...");
+
+            eventSource = new EventSource(sseUrl);
+
+            eventSource.onopen = () => {
+                appendLog(transportName + " 连接成功", "info");
+                updateConnectButton(true);
+                updateStatus("已连接");
+                retryCount = 0;
+            };
+
+            eventSource.onmessage = (event) => {
+                // The heartbeat keeps the stream alive; it is not a log line
+                if (event.data === '[heartbeat]') {
+                    return;
+                }
+                let logType = "normal";
+                const msg = event.data.toLowerCase();
+                if (msg.includes("critical") ||
+                    msg.includes("warning") ||
+                    msg.includes("error")) {
+                    logType = "error";
+                }
+                appendLog(event.data, logType);
+            };
+
+            eventSource.onerror = () => {
+                appendLog(transportName + " 连接错误", "error");
+                updateStatus("连接错误");
+                updateConnectButton(false);
+                scheduleReconnect();
+            };
+        }
+
+        function disconnect() {
+            if (!eventSource) return;
+            manualClose = true;
+            eventSource.close();
+            eventSource = null;
+            appendLog(transportName + " 连接已关闭", "info");
+            updateStatus("已断开");
+        }
+)xxx"

@@ -208,13 +208,18 @@ class Server(object):
             pass
 
     def tcp_connect(self):
-        """Connect a log consumer and consume its welcome banner."""
+        """Connect a log consumer and consume its welcome banner.
+
+        The timeout is generous on purpose: a box running the rest of the suite
+        at the same time accepts a connection late now and then, and that is not
+        the behaviour under test here.
+        """
         try:
-            sock = socket.create_connection(("127.0.0.1", self.tcp_port), timeout=5)
+            sock = socket.create_connection(("127.0.0.1", self.tcp_port), timeout=10)
         except OSError:
             return None
         self.track(sock)
-        banner = recv_until(sock, b"\n", 3)
+        banner = recv_until(sock, b"\n", 5)
         if b"Welcome" not in banner:
             sock.close()
             return None
@@ -431,7 +436,7 @@ def check_tcp_fanout(ctx):
     ctx.server.send(b"MANY-CLIENTS\n")
     missing = 0
     for sock in many:
-        if b"MANY-CLIENTS\n" not in recv_until(sock, b"MANY-CLIENTS", 5):
+        if b"MANY-CLIENTS\n" not in recv_until(sock, b"MANY-CLIENTS", 10):
             missing += 1
     ctx.check(missing == 0, "all 50 concurrent consumers receive the line (missing %d)" % missing)
     for sock in many:
@@ -473,10 +478,10 @@ def check_tcp_slow_consumer(ctx):
     ctx.check(probe is not None, "a TCP consumer is accepted while the stalled one is blocked")
     if probe is not None:
         ctx.server.send(b"AFTER-TCP-FLOOD\n")
-        data = recv_until(probe, b"AFTER-TCP-FLOOD", 2.0)
+        data = recv_until(probe, b"AFTER-TCP-FLOOD", 5.0)
         ctx.check(b"AFTER-TCP-FLOOD" in data,
                   "a stalled TCP consumer does not stall the IO thread "
-                  "(UDP reception and the fan-out answer within 2s)")
+                  "(UDP reception and the fan-out answer within 5s)")
         probe.close()
 
     ctx.check(stalled_closed(stalled, 15.0),

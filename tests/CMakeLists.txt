@@ -3,6 +3,13 @@
 # Tests are registered with CTest; no third party test framework is used.
 cmake_minimum_required(VERSION 3.15)
 
+# Two tests compile app/src/html_page.cc, which embeds UTF-8 viewer pages;
+# without this MSVC warns C4819 on every page included into those targets.
+if(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
+    add_compile_options(/source-charset:utf-8)
+    add_compile_options(/execution-charset:utf-8)
+endif()
+
 # app_log unit tests: formatting, file writes, rotation and recovery.
 add_executable(app_log_test app_log_test.cc)
 target_link_libraries(app_log_test PRIVATE applog)

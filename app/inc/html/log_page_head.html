@@ -1,12 +1,16 @@
 u8R"xxx(
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
-<!-- SSE log viewer: subscribes to /sse on this host, renders incoming
-     lines in batches, and can auto scroll, clear or save them. -->
+<!-- Log viewer shared by both web front ends: the layout, the styling and
+     everything that renders lines. It is compiled in ahead of a transport
+     file (log_page_sse.html or log_page_ws.html), which supplies
+     transportName, connect(), disconnect() and isConnected(); log_page_tail.html
+     closes the script and the document. html_page.cc concatenates the three
+     raw string literals into one page. -->
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>日志监控 (SSE)</title>
+    <title>日志监控</title>
     <style>
         html, body {
             height: 100%;
@@ -106,14 +110,13 @@ u8R"xxx(
     </div>
 
     <script>
-        let eventSource = null;
         let autoScroll = true;
         const maxLogLines = 10000;
         const removeBatchSize = 500;   // lines dropped per trim, to keep DOM churn low
         const flushInterval = 50;      // batch flush interval in milliseconds
         const reconnectDelay = 3000;
-        let manualClose = false;
-        let retryCount = 0;
+        let manualClose = false;       // set when the user asked to disconnect
+        let retryCount = 0;            // consecutive reconnect attempts
 
         // Pending lines and the flush timer
         let pendingLogs = [];
@@ -170,68 +173,6 @@ u8R"xxx(
 
         function updateStatus(text) {
             document.getElementById("status").textContent = text;
-        }
-
-        function connectSSE() {
-            if (eventSource) {
-                eventSource.close();
-            }
-
-            manualClose = false;
-            const sseUrl = '/sse';
-            appendLog("SSE 正在连接 " + sseUrl + " ...", "info");
-            updateStatus("连接中...");
-
-            eventSource = new EventSource(sseUrl);
-
-            eventSource.onopen = () => {
-                appendLog("SSE 连接成功", "info");
-                updateConnectButton(true);
-                updateStatus("已连接");
-                retryCount = 0;
-            };
-
-            eventSource.onmessage = (event) => {
-                if (event.data === '[heartbeat]') {
-                    return;
-                }
-                let logType = "normal";
-                const msg = event.data.toLowerCase();
-                if (msg.includes("critical") ||
-                    msg.includes("warning") ||
-                    msg.includes("error")) {
-                    logType = "error";
-                }
-                appendLog(event.data, logType);
-            };
-
-            eventSource.onerror = (event) => {
-                appendLog("SSE 连接错误", "error");
-                updateStatus("连接错误");
-                updateConnectButton(false);
-
-                if (!manualClose) {
-                    if (retryCount < 3) {
-                        retryCount++;
-                        appendLog("SSE 连接断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
-                        updateStatus("重连中...");
-                        setTimeout(connectSSE, reconnectDelay);
-                    } else {
-                        appendLog("SSE 重连失败，停止尝试", "error");
-                        updateStatus("重连失败");
-                    }
-                }
-            };
-        }
-
-        function disconnectSSE() {
-            if (eventSource) {
-                manualClose = true;
-                eventSource.close();
-                eventSource = null;
-                appendLog("SSE 连接已关闭", "info");
-                updateStatus("已断开");
-            }
         }
 
         function updateConnectButton(connected) {
@@ -292,20 +233,23 @@ u8R"xxx(
             document.body.removeChild(a);
         }
 
-        document.getElementById("toggleConnectBtn").addEventListener("click", () => {
-            if (eventSource) {
-                disconnectSSE();
-                updateConnectButton(false);
-            } else {
-                retryCount = 0;
-                connectSSE();
+        /**
+         * Log a drop and retry the connection, at most three times in a row.
+         * A connection the user closed on purpose is never retried, and so is
+         * a retry that was already scheduled when the user closed one.
+         */
+        function scheduleReconnect() {
+            if (manualClose) return;
+            if (retryCount >= 3) {
+                appendLog(transportName + " 重连失败，停止尝试", "error");
+                updateStatus("重连失败");
+                return;
             }
-        });
-
-        document.getElementById("toggleScrollBtn").addEventListener("click", toggleAutoScroll);
-        document.getElementById("clearLogBtn").addEventListener("click", clearLogBox);
-        document.getElementById("saveLogBtn").addEventListener("click", saveLog);
-    </script>
-</body>
-</html>
+            retryCount++;
+            appendLog(transportName + " 异常断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
+            updateStatus("重连中...");
+            setTimeout(() => {
+                if (!manualClose) connect();
+            }, reconnectDelay);
+        }
 )xxx"

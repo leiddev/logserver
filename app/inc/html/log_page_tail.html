@@ -1,0 +1,22 @@
+u8R"xxx(
+
+        // The transport file above defines connect(), disconnect() and
+        // isConnected(); the buttons only call those, so the same bindings
+        // serve both front ends.
+        document.getElementById("toggleConnectBtn").addEventListener("click", () => {
+            if (isConnected()) {
+                disconnect();
+                updateConnectButton(false);
+            } else {
+                retryCount = 0;
+                connect();
+            }
+        });
+
+        document.getElementById("toggleScrollBtn").addEventListener("click", toggleAutoScroll);
+        document.getElementById("clearLogBtn").addEventListener("click", clearLogBox);
+        document.getElementById("saveLogBtn").addEventListener("click", saveLog);
+    </script>
+</body>
+</html>
+)xxx"
