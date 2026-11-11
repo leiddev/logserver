@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.9] - 2026-11-11
+
 ### Fixed
 
 - TCP 消费端的每个连接此前有一条无界的待发队列：一个连上却不读数据的客户端，在日志洪泛下会让进程内存持续上涨。现在单个连接的待发字节超过 4 MB 即关闭该连接，与 SSE、WebSocket 的上限一致，其余客户端不受影响。
@@ -229,7 +231,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.8...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.9...HEAD
+[V0.8.9]: https://github.com/leiddev/logserver/releases/tag/v0.8.9
 [V0.8.8]: https://github.com/leiddev/logserver/releases/tag/v0.8.8
 [V0.8.7]: https://github.com/leiddev/logserver/releases/tag/v0.8.7
 [V0.8.6]: https://github.com/leiddev/logserver/releases/tag/v0.8.6
