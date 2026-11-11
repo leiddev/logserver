@@ -56,6 +56,11 @@ if(LOG_SERVER_TSAN_TESTS)
     endif()
 endif()
 
+# Browser-level tests of the log viewer page, driven through Playwright. It
+# needs Chromium, a large download, so it stays off unless asked for; CI
+# installs Playwright and turns it on for the SSE and WebSocket builds.
+option(LOG_SERVER_UI_TESTS "Run the browser UI tests with Playwright" OFF)
+
 # End-to-end test of the LogServer executable; needs Python 3.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
@@ -75,6 +80,17 @@ if(Python3_Interpreter_FOUND)
                     $<TARGET_FILE:LogServer> ${WEBSERVER_TYPE}
         )
         set_tests_properties(web_frontend PROPERTIES TIMEOUT 180)
+
+        # The page itself in a real Chromium: rendering, trimming, clearing,
+        # saving, auto-scroll and reconnection.
+        if(LOG_SERVER_UI_TESTS)
+            add_test(
+                NAME web_ui
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/web_ui_test.py
+                        $<TARGET_FILE:LogServer> ${WEBSERVER_TYPE}
+            )
+            set_tests_properties(web_ui PROPERTIES TIMEOUT 300)
+        endif()
     endif()
 
     # The UDP producer and the TCP consumer side: burst loss and ordering,

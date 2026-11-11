@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增浏览器级 UI 测试 `web_ui`：用 Playwright 驱动真实 Chromium 打开内置页面，覆盖状态圆点与启动/停止按钮、逐行渲染与 HTML 转义、60 KB 长行、清空（含尚未刷新的批次）、10000 行上限与 10 万行后的 DOM 及 JavaScript 堆稳定、自动滚动、保存下载、关于对话框，以及服务端消失后的三次重连与放弃。默认关闭，配置时加 `-DLOG_SERVER_UI_TESTS=ON`；CI 在 SSE 与 WebSocket 两种构建上运行。
+
 ### Fixed
 
 - 修改 `app/inc/html/log_page_*.html` 后增量构建不会重新编译内嵌页面的目标，可执行文件继续携带旧页面：编译器的依赖扫描没有报告这些被 `#include` 的页面文件，现在为 `html_page.cc` 显式声明了这四个依赖。

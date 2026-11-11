@@ -54,6 +54,50 @@ jobs:
         working-directory: build/out/app
         run: ./LogServer --help
 
+  web-ui:
+    # Drives the page in a real Chromium; the protocol-level front end tests
+    # live in webserver-variants. Pinned so the browser cache stays usable.
+    name: Browser UI tests (${{ matrix.type }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        type: [SSE, WEBSOCKET]
+    env:
+      PLAYWRIGHT_VERSION: "1.62.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ env.PLAYWRIGHT_VERSION }}
+
+      # A venv keeps the install off the PEP 668 managed system Python, and
+      # CMake is pointed at it so CTest runs the tests with the same one.
+      - name: Install Playwright
+        run: |
+          python3 -m venv .venv-playwright
+          .venv-playwright/bin/pip install playwright==${{ env.PLAYWRIGHT_VERSION }}
+          .venv-playwright/bin/playwright install --with-deps chromium
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DEXAMPLE=OFF
+          -DWEBSERVER_TYPE=${{ matrix.type }}
+          -DLOG_SERVER_UI_TESTS=ON
+          -DPython3_EXECUTABLE=${{ github.workspace }}/.venv-playwright/bin/python
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build -R web_ui --output-on-failure
+
   thread-sanitizer:
     # Guards against the data race on Websocket_server's subscriber set, which
     # a normal build cannot detect.

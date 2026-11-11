@@ -166,6 +166,7 @@ cd build && ctest --output-on-failure
 - `app_log`：日志格式化、原始写入保真、`initFile` 守卫、切分与保留策略、重启追加等单元测试。写文件的用例需要 tmpfs，Linux 上使用 `/dev/shm`，Windows 上使用 `%TEMP%`。
 - `server_e2e`：启动真实进程，校验 UDP→TCP 转发、SSE 推送、HTTP 页面、`SIGINT` 正常退出，以及文件日志是否遵循 tmpfs 门槛。
 - `web_frontend`：SSE/WebSocket 前端的稳定性与健壮性——停滞的浏览器被剔除且不阻塞转发、事件完整有序、中途断开、畸形请求、连接抖动。
+- `web_ui`：用 Playwright 驱动真实 Chromium 打开页面，验证状态圆点与启动/停止按钮、逐行渲染与 HTML 转义、60 KB 长行、清空（含尚未刷新的批次）、10000 行上限与 10 万行后的 DOM 与 JavaScript 堆稳定、自动滚动、保存下载、关于对话框，以及服务端消失后的三次重连与放弃。默认不启用，因为 Playwright 需要下载 Chromium：先 `pip install playwright` 与 `python -m playwright install chromium`，再在配置时加 `-DLOG_SERVER_UI_TESTS=ON`。
 - `transport_stability`：UDP 生产接口与 TCP 消费接口的专项测试——1000 条带序号数据报的顺序/完整性/丢包率、65507 字节最大报文、空报文、多生产者、字节级保真；TCP 多消费者扇出、慢消费者被剔除、中途断开、洪泛下连接抖动、分片写入的回显、带活跃连接退出。三个 `WEBSERVER_TYPE` 变体都会运行。
 
 ## 许可证
