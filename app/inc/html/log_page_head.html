@@ -259,6 +259,7 @@ u8R"xxx(
         const reconnectDelay = 3000;
         let manualClose = false;       // set when the user asked to disconnect
         let retryCount = 0;            // consecutive reconnect attempts
+        let gaveUp = false;            // set when the retries ran out
 
         // Pending lines and the flush timer
         let pendingLogs = [];
@@ -390,10 +391,14 @@ u8R"xxx(
          * Log a drop and retry the connection, at most three times in a row.
          * A connection the user closed on purpose is never retried, and so is
          * a retry that was already scheduled when the user closed one.
+         * Once the retries ran out the page stays disconnected: late retries
+         * are dropped here, and the transport stops its own reconnection, or
+         * the page would keep reporting failures for ever.
          */
         function scheduleReconnect() {
-            if (manualClose) return;
+            if (manualClose || gaveUp) return;
             if (retryCount >= 3) {
+                gaveUp = true;
                 appendLog(transportName + " 重连失败，停止尝试", "error");
                 updateStatus("重连失败");
                 return;
@@ -402,7 +407,7 @@ u8R"xxx(
             appendLog(transportName + " 异常断开，" + (reconnectDelay / 1000) + " 秒后尝试重连...", "error");
             updateStatus("重连中...");
             setTimeout(() => {
-                if (!manualClose) connect();
+                if (!manualClose && !gaveUp) connect();
             }, reconnectDelay);
         }
 )xxx"
