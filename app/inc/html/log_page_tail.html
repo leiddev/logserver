@@ -16,6 +16,13 @@ u8R"xxx(
         document.getElementById("toggleScrollBtn").addEventListener("click", toggleAutoScroll);
         document.getElementById("clearLogBtn").addEventListener("click", clearLogBox);
         document.getElementById("saveLogBtn").addEventListener("click", saveLog);
+
+        // The build fills in the name and version; the mode is whatever
+        // transport the page was compiled with.
+        document.getElementById("aboutBtn").addEventListener("click", () => {
+            document.getElementById("aboutMode").textContent = transportName;
+            document.getElementById("aboutDialog").showModal();
+        });
     </script>
 </body>
 </html>

@@ -6,16 +6,47 @@ u8R"xxx(
      file (log_page_sse.html or log_page_ws.html), which supplies
      transportName, connect(), disconnect() and isConnected(); log_page_tail.html
      closes the script and the document. html_page.cc concatenates the three
-     raw string literals into one page. -->
+     raw string literals into one page and fills in __APP_NAME__ and
+     __APP_VERSION__ for the about dialog. -->
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>日志监控</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>__APP_NAME__ 日志监控</title>
     <style>
+        /* One neutral surface plus a single accent and a single danger colour;
+           buttons are told apart by weight, not by a palette of solid colours. */
+        :root {
+            color-scheme: light;
+            --bg: #ffffff;
+            --surface: #f6f8fa;
+            --border: #d0d7de;
+            --hover: #eef1f4;
+            --active: #e4e9ee;
+            --text: #1f2328;
+            --muted: #59636e;
+            --accent: #0969da;
+            --accent-strong: #0550ae;
+            --accent-soft: #ddf4ff;
+            --accent-line: #b6e3ff;
+            --danger: #cf222e;
+            --danger-soft: #ffebe9;
+            --ok: #1a7f37;
+            --warn: #9a6700;
+        }
+
+        * { box-sizing: border-box; }
+
         html, body {
             height: 100%;
             margin: 0;
             padding: 0;
+        }
+
+        body {
+            color: var(--text);
+            background: var(--surface);
+            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
         }
 
         #container {
@@ -24,90 +55,201 @@ u8R"xxx(
             height: 100%;
         }
 
-        #title {
-            text-align: left;
-            font-size: 24px;
-            background-color: #f0f0f0;
-            padding: 10px 10px 0px 10px;
+        #bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px 16px;
+            flex-wrap: wrap;
+            padding: 10px 16px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
         }
+
+        #title {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        #status {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 12px;
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--muted);
+        }
+
+        #status::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            margin-right: 6px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        #status[data-state="ok"]::before   { background: var(--ok); }
+        #status[data-state="busy"]::before { background: var(--warn); }
+        #status[data-state="err"]::before  { background: var(--danger); }
 
         #controls {
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
-            #controls button {
-                margin-right: 10px;
-                padding: 8px 15px;
-                font-size: 14px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                transition: background-color 0.2s ease, color 0.2s ease;
-            }
+        button {
+            font: inherit;
+            font-size: 13px;
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            cursor: pointer;
+            transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
 
+        button:hover { background: var(--hover); }
+        button:active { background: var(--active); }
+
+        button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        /* Primary action: the only filled button on the page. */
         .connect-btn {
-            background-color: #28a745;
-            color: white;
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
         }
 
+        .connect-btn:hover {
+            background: var(--accent-strong);
+            border-color: var(--accent-strong);
+        }
+
+        /* Stopping is destructive, but it is not the primary action. */
         .disconnect-btn {
-            background-color: #dc3545;
-            color: white;
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .disconnect-btn:hover {
+            background: var(--danger-soft);
+            border-color: var(--danger);
         }
 
         .scroll-on {
-            background-color: #007bff;
-            color: white;
+            background: var(--accent-soft);
+            border-color: var(--accent-line);
+            color: var(--accent-strong);
         }
 
-        .scroll-off {
-            background-color: #6c757d;
-            color: white;
-        }
+        .scroll-on:hover { background: var(--accent-soft); filter: brightness(0.96); }
 
-        #clearLogBtn {
-            background-color: #ffc107;
-            color: black;
-        }
+        .scroll-off { color: var(--muted); }
 
-        #saveLogBtn {
-            background-color: #17a2b8;
-            color: white;
+        #aboutBtn {
+            border-color: transparent;
+            color: var(--muted);
         }
 
         #log-box {
             flex: 1;
             min-height: 300px;
+            padding: 12px 16px;
             overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            background-color: #f9f9f9;
-            font-family: Consolas, "Courier New", monospace;
+            background: var(--bg);
+            font-family: Consolas, "SFMono-Regular", "Courier New", monospace;
+            font-size: 13px;
+            line-height: 1.6;
             white-space: pre-wrap;
+            overflow-wrap: break-word;
         }
 
-        #status {
-            font-size: 12px;
-            color: #666;
-            margin-left: 15px;
+        #log-box:empty::before {
+            content: "等待日志…";
+            color: var(--muted);
+        }
+
+        #log-box .line-info  { color: var(--accent); }
+        #log-box .line-error { color: var(--danger); }
+
+        #aboutDialog {
+            width: 320px;
+            max-width: calc(100% - 32px);
+            padding: 20px 24px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg);
+            color: var(--text);
+            box-shadow: 0 8px 24px rgba(31, 35, 40, 0.15);
+        }
+
+        #aboutDialog::backdrop { background: rgba(31, 35, 40, 0.35); }
+
+        #aboutDialog h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        #aboutDialog .tagline {
+            margin: 2px 0 16px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        #aboutDialog dl {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 6px 16px;
+            margin: 0 0 20px;
+            font-size: 13px;
+        }
+
+        #aboutDialog dt { color: var(--muted); }
+        #aboutDialog dd { margin: 0; }
+
+        #aboutDialog form {
+            margin: 0;
+            text-align: right;
         }
     </style>
 </head>
 <body>
     <div id="container">
-        <div id="title">日志监控<span id="status"></span></div>
+        <div id="bar">
+            <div id="title">日志监控<span id="status" data-state="idle">未连接</span></div>
 
-        <div id="controls">
-            <button id="toggleConnectBtn" class="connect-btn">启动</button>
-            <button id="toggleScrollBtn" class="scroll-on">自动滚动</button>
-            <button id="clearLogBtn">清空</button>
-            <button id="saveLogBtn">保存</button>
+            <div id="controls">
+                <button id="toggleConnectBtn" class="connect-btn">启动</button>
+                <button id="toggleScrollBtn" class="scroll-on">自动滚动</button>
+                <button id="clearLogBtn">清空</button>
+                <button id="saveLogBtn">保存</button>
+                <button id="aboutBtn">关于</button>
+            </div>
         </div>
 
         <div id="log-box"></div>
     </div>
+
+    <dialog id="aboutDialog">
+        <h2>__APP_NAME__</h2>
+        <p class="tagline">日志服务器</p>
+        <dl>
+            <dt>版本</dt><dd>__APP_VERSION__</dd>
+            <dt>传输模式</dt><dd id="aboutMode"></dd>
+            <dt>版权</dt><dd>&copy; 2023-2026 Leid</dd>
+            <dt>许可证</dt><dd>MIT License</dd>
+        </dl>
+        <form method="dialog"><button>关闭</button></form>
+    </dialog>
 
     <script>
         let autoScroll = true;
@@ -146,9 +288,9 @@ u8R"xxx(
                 const line = document.createElement("div");
                 line.textContent = item.message;
                 if (item.type === "error") {
-                    line.style.color = "red";
+                    line.className = "line-error";
                 } else if (item.type === "info") {
-                    line.style.color = "blue";
+                    line.className = "line-info";
                 }
                 fragment.appendChild(line);
             }
@@ -171,8 +313,19 @@ u8R"xxx(
             }
         }
 
+        // How the state dot in front of the status text is coloured
+        const statusStates = {
+            "已连接": "ok",
+            "连接中...": "busy",
+            "重连中...": "busy",
+            "连接错误": "err",
+            "重连失败": "err"
+        };
+
         function updateStatus(text) {
-            document.getElementById("status").textContent = text;
+            const status = document.getElementById("status");
+            status.textContent = text;
+            status.dataset.state = statusStates[text] || "idle";
         }
 
         function updateConnectButton(connected) {
