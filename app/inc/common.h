@@ -14,14 +14,15 @@
 #define APP_NAME             "LogServer"
 #define APP_VERSION_STR      "V0.8.9"
 
-// Internal messages carry the [APP] prefix so they can be told apart from the
-// logs received over UDP when both end up in the same file.
+// Internal messages are prefixed with the bracketed application name, e.g.
+// "[LogServer] ", so they can be told apart from the logs received over UDP
+// when both end up in the same file.
 #define LOG_TRACE(...) applog::Logger::instance().writef(applog::kTrace, __VA_ARGS__)
-#define LOG_DEBUG(...) applog::Logger::instance().writef(applog::kDebug, "[APP] " __VA_ARGS__)
-#define LOG_INFO(...) applog::Logger::instance().writef(applog::kInfo, "[APP] " __VA_ARGS__)
-#define LOG_WARN(...) applog::Logger::instance().writef(applog::kWarn, "[APP] " __VA_ARGS__)
-#define LOG_ERR(...) applog::Logger::instance().writef(applog::kError, "[APP] " __VA_ARGS__)
-#define LOG_CRITICAL(...) applog::Logger::instance().writef(applog::kCritical, "[APP] " __VA_ARGS__)
+#define LOG_DEBUG(...) applog::Logger::instance().writef(applog::kDebug, "[" APP_NAME "] " __VA_ARGS__)
+#define LOG_INFO(...) applog::Logger::instance().writef(applog::kInfo, "[" APP_NAME "] " __VA_ARGS__)
+#define LOG_WARN(...) applog::Logger::instance().writef(applog::kWarn, "[" APP_NAME "] " __VA_ARGS__)
+#define LOG_ERR(...) applog::Logger::instance().writef(applog::kError, "[" APP_NAME "] " __VA_ARGS__)
+#define LOG_CRITICAL(...) applog::Logger::instance().writef(applog::kCritical, "[" APP_NAME "] " __VA_ARGS__)
 
 // Log the failed check and return -1 from the enclosing function.
 #define CHECK_PTR(p)                                                       \
