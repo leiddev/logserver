@@ -33,7 +33,8 @@
 
 class Session : public std::enable_shared_from_this<Session> {
  public:
-  explicit Session(asio::ip::tcp::socket socket) : socket_(std::move(socket)), stopped_(false) {
+  explicit Session(asio::ip::tcp::socket socket)
+      : socket_(std::move(socket)), stopped_(false), queued_bytes_(0) {
   }
 
   // Remember the peer address, greet it, and start reading.
@@ -58,11 +59,24 @@ class Session : public std::enable_shared_from_this<Session> {
   }
 
   // Queue a message for this client; either an echo or a broadcast.
+  //
+  // A consumer that stops reading fills this queue and the server grows with
+  // every log line, so past kMaxQueuedBytes the session is dropped the same
+  // way the SSE and WebSocket front ends drop one. The check runs inside the
+  // posted handler, which keeps the queue on the IO thread only.
   void deliver(const std::string& msg) {
     auto self(shared_from_this());
     // Post through the executor so the queue is only touched from the IO thread.
     asio::post(socket_.get_executor(), [this, self, msg]() {
+      if (stopped_)
+        return;
+      if (queued_bytes_ + msg.size() > kMaxQueuedBytes) {
+        LOG_WARN("TCP client is not reading, closing it\n");
+        stop();
+        return;
+      }
       bool write_in_progress = !write_msgs_.empty();
+      queued_bytes_ += msg.size();
       write_msgs_.push_back(msg);
       if (!write_in_progress) {
         do_write();
@@ -110,6 +124,7 @@ class Session : public std::enable_shared_from_this<Session> {
     asio::async_write(socket_, asio::buffer(write_msgs_.front().data(), write_msgs_.front().length()),
                       [this, self](std::error_code ec, std::size_t /*length*/) {
                         if (!ec) {
+                          queued_bytes_ -= write_msgs_.front().size();
                           write_msgs_.pop_front();
                           if (!write_msgs_.empty()) {
                             do_write();
@@ -134,9 +149,13 @@ class Session : public std::enable_shared_from_this<Session> {
 
   asio::ip::tcp::socket socket_;
   enum { max_length = 1024 };
+  // Unsent bytes allowed for one client before it is considered gone. Matches
+  // the SSE (SSE_MAX_QUEUED_BYTES) and WebSocket (kMaxBufferedBytes) limits.
+  enum { kMaxQueuedBytes = 4 * 1024 * 1024 };
   char data_[max_length];
   bool stopped_;
   std::deque<std::string> write_msgs_;
+  std::size_t queued_bytes_;
   std::function<void(std::shared_ptr<Session>)> on_close_;
   asio::ip::tcp::endpoint endpoint_;
 };

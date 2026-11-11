@@ -35,12 +35,15 @@ class Udp_server {
              std::function<void(const std::string&)> broadcast_cb)
       : socket_(io_context, asio::ip::udp::endpoint(asio::ip::udp::v4(), udp_port)),
         data_(kMaxDatagramSize),
-        broadcast_cb_(broadcast_cb) {
+        broadcast_cb_(broadcast_cb),
+        stopped_(false) {
     start_receive();
   }
 
-  // Cancel the pending receive and close the socket.
+  // Cancel the pending receive and close the socket. The cancelled handler
+  // still runs and would otherwise arm another receive on a dead socket.
   void stop() {
+    stopped_ = true;
     socket_.cancel();
     socket_.close();
   }
@@ -55,19 +58,25 @@ class Udp_server {
   void start_receive() {
     socket_.async_receive_from(asio::buffer(data_), remote_endpoint_,
                                [this](std::error_code ec, std::size_t bytes_recvd) {
-                                 if (!ec && bytes_recvd > 0) {
-                                   if (bytes_recvd == data_.size()) {
-                                     LOG_ERR("UDP datagram of {} bytes fills the receive buffer, it may be "
-                                             "truncated\n",
-                                             bytes_recvd);
+                                 if (stopped_)
+                                   return;
+                                 if (!ec) {
+                                   // An empty datagram carries no log line; it is
+                                   // not an error, so it is dropped quietly.
+                                   if (bytes_recvd > 0) {
+                                     if (bytes_recvd == data_.size()) {
+                                       LOG_ERR("UDP datagram of {} bytes fills the receive buffer, it may be "
+                                               "truncated\n",
+                                               bytes_recvd);
+                                     }
+                                     std::string message(data_.data(), bytes_recvd);
+                                     // Hand the datagram to the owner, which fans
+                                     // it out to TCP clients, web pages and file.
+                                     if (broadcast_cb_) {
+                                       broadcast_cb_(message);
+                                     }
                                    }
-                                   std::string message(data_.data(), bytes_recvd);
-                                   // Hand the datagram to the owner, which fans
-                                   // it out to TCP clients, web pages and file.
-                                   if (broadcast_cb_) {
-                                     broadcast_cb_(message);
-                                   }
-                                 } else {
+                                 } else if (ec != asio::error::operation_aborted) {
                                    LOG_ERR("UDP receive error: {}\n", ec.message());
                                  }
                                  start_receive();
@@ -78,6 +87,7 @@ class Udp_server {
   asio::ip::udp::endpoint remote_endpoint_;
   std::vector<char> data_;
   std::function<void(const std::string&)> broadcast_cb_;
+  bool stopped_;
 };
 
 #endif  // !_UDP_SERVER_HH_
