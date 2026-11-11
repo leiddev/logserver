@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.10] - 2026-11-11
+
 ### Changed
 
 - Web 前端页面合并为一份实现：布局、样式与日志渲染放进共用的 `log_page_head.html`，两种模式各自只保留连接层（`log_page_sse.html`、`log_page_ws.html`），`log_page_tail.html` 负责按钮绑定与收尾，`html_page.cc` 由相邻字符串字面量在编译期拼成一页。重连策略此前两边各写了一遍且行为不一致，现在只有一份；每个构建也只带自己那份连接代码。
@@ -242,7 +244,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.9...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.10...HEAD
+[V0.8.10]: https://github.com/leiddev/logserver/releases/tag/v0.8.10
 [V0.8.9]: https://github.com/leiddev/logserver/releases/tag/v0.8.9
 [V0.8.8]: https://github.com/leiddev/logserver/releases/tag/v0.8.8
 [V0.8.7]: https://github.com/leiddev/logserver/releases/tag/v0.8.7

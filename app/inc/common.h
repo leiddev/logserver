@@ -12,7 +12,7 @@
 #include "app_log.hh"
 
 #define APP_NAME             "LogServer"
-#define APP_VERSION_STR      "V0.8.9"
+#define APP_VERSION_STR      "V0.8.10"
 
 // Internal messages are prefixed with the bracketed application name, e.g.
 // "[LogServer] ", so they can be told apart from the logs received over UDP
