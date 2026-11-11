@@ -164,6 +164,8 @@ cd build && ctest --output-on-failure
 
 - `app_log`：日志格式化、原始写入保真、`initFile` 守卫、切分与保留策略、重启追加等单元测试。写文件的用例需要 tmpfs，Linux 上使用 `/dev/shm`，Windows 上使用 `%TEMP%`。
 - `server_e2e`：启动真实进程，校验 UDP→TCP 转发、SSE 推送、HTTP 页面、`SIGINT` 正常退出，以及文件日志是否遵循 tmpfs 门槛。
+- `web_frontend`：SSE/WebSocket 前端的稳定性与健壮性——停滞的浏览器被剔除且不阻塞转发、事件完整有序、中途断开、畸形请求、连接抖动。
+- `transport_stability`：UDP 生产接口与 TCP 消费接口的专项测试——1000 条带序号数据报的顺序/完整性/丢包率、65507 字节最大报文、空报文、多生产者、字节级保真；TCP 多消费者扇出、慢消费者被剔除、中途断开、洪泛下连接抖动、分片写入的回显、带活跃连接退出。三个 `WEBSERVER_TYPE` 变体都会运行。
 
 ## 许可证
 

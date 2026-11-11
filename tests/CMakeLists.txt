@@ -63,6 +63,16 @@ if(Python3_Interpreter_FOUND)
         )
         set_tests_properties(web_frontend PROPERTIES TIMEOUT 180)
     endif()
+
+    # The UDP producer and the TCP consumer side: burst loss and ordering,
+    # maximum and empty datagrams, fan-out under load, slow consumers, churn
+    # and the shutdown path. Runs for every web server type.
+    add_test(
+        NAME transport_stability
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/transport_stability_test.py
+                $<TARGET_FILE:LogServer> ${WEBSERVER_TYPE}
+    )
+    set_tests_properties(transport_stability PROPERTIES TIMEOUT 180)
 else()
     message(STATUS "Python3 not found, server_e2e test is skipped")
 endif()
