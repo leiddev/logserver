@@ -55,6 +55,16 @@ list(FILTER SOURCES EXCLUDE REGEX "text_encoding\\.cc$")
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_WEB_SERVER=${ENABLE_WEB_SERVER})
 
+# html_page.cc #includes the page files, but the compiler's dependency scan
+# does not report them, so without this an edit to a page leaves the executable
+# carrying the old copy.
+set_property(SOURCE src/html_page.cc APPEND PROPERTY OBJECT_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/inc/html/log_page_head.html
+    ${CMAKE_CURRENT_SOURCE_DIR}/inc/html/log_page_sse.html
+    ${CMAKE_CURRENT_SOURCE_DIR}/inc/html/log_page_ws.html
+    ${CMAKE_CURRENT_SOURCE_DIR}/inc/html/log_page_tail.html
+)
+
 target_link_libraries(
     ${PROJECT_NAME}
     applog

@@ -22,6 +22,12 @@ add_test(NAME text_encoding COMMAND text_encoding_test)
 
 find_package(Threads REQUIRED)
 
+# These tests compile html_page.cc, which #includes the page files; the
+# compiler's dependency scan does not report them, so name them here.
+set(PAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../app/inc/html")
+set_source_files_properties(../app/src/html_page.cc PROPERTIES OBJECT_DEPENDS
+    "${PAGE_DIR}/log_page_head.html;${PAGE_DIR}/log_page_sse.html;${PAGE_DIR}/log_page_ws.html;${PAGE_DIR}/log_page_tail.html")
+
 # Shutdown guard: stop() must not leave process_messages() waiting when the
 # endpoint never started listening.
 add_executable(websocket_stop_test websocket_stop_test.cc ../app/src/html_page.cc)

@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修改 `app/inc/html/log_page_*.html` 后增量构建不会重新编译内嵌页面的目标，可执行文件继续携带旧页面：编译器的依赖扫描没有报告这些被 `#include` 的页面文件，现在为 `html_page.cc` 显式声明了这四个依赖。
+
 ## [V0.8.11] - 2026-11-11
 
 ### Changed
