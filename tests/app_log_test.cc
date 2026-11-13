@@ -689,14 +689,21 @@ TEST_CASE("initFile refuses a directory that is not a temporary file system") {
   }
   const std::string dir = "/logserver_unsupported_fs_test/";
 
-  // Running as root with / writable takes part fully: initFile must refuse
-  // the path before it creates anything, and the directory must stay absent.
-  // Otherwise only the refusal is checked, as the run may not be allowed to
-  // create or remove anything in /.
-  const bool can_create = ::geteuid() == 0 && ::access("/", W_OK) == 0;
+  // A non-root run cannot create the directory, and whether it can look
+  // at / depends on the mount, so only the refusal is checked there.
+  if (::access("/", W_OK) != 0) {
+    applog::Logger &logger = applog::Logger::instance();
+    CHECK(!logger.initFile(dir, "logserver", 1024, 5));
+    return;
+  }
+
+  // Root: initFile refuses the path before it creates anything, and nothing
+  // is left behind - the refusal must not leave the directory it made.
+  const std::vector<std::string> before = listFiles("/");
   applog::Logger &logger = applog::Logger::instance();
   CHECK(!logger.initFile(dir, "logserver", 1024, 5));
-  CHECK(!can_create || ::access(dir.c_str(), F_OK) != 0);
+  const std::vector<std::string> after = listFiles("/");
+  CHECK(before == after);
 #endif
 }
 
