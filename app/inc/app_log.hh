@@ -96,6 +96,9 @@ class Logger {
   // so writes never go to an unreachable inode. Checked at most once every
   // kCheckIntervalWrites writes or kCheckInterval after the previous check.
   void reopenIfReplacedLocked();
+  // Rename the current file to an archive when it is full. A rename that
+  // fails is retried up to kMaxRotateFailures times and then given up on for
+  // good: the file keeps growing rather than the lines being dropped.
   void rotateLocked();
   void cleanupLocked();
   std::string archivePathLocked();
@@ -112,6 +115,10 @@ class Logger {
   std::size_t current_size_ = 0;
   std::size_t writes_since_check_ = 0;
   std::chrono::steady_clock::time_point last_check_ = std::chrono::steady_clock::now();
+  std::size_t rotate_failures_ = 0;
+  // The directory was already missing once, and a later open in the same
+  // directory failed: only then is that failure worth another line on stderr.
+  bool dir_reported_missing_ = false;
   std::FILE *file_ = nullptr;
   bool open_error_reported_ = false;
 };

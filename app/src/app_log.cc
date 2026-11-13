@@ -36,6 +36,12 @@ const char *const kArchiveSeparator = "_";
 const std::size_t kCheckIntervalWrites = 32;
 const std::chrono::milliseconds kCheckInterval(1000);
 
+// A rotation whose rename fails is retried this many times before the file is
+// left to grow past max_file_size. A directory that cannot take a rename, full
+// or read only, does not recover on its own, and retrying every line would
+// only add stderr noise.
+const std::size_t kMaxRotateFailures = 3;
+
 #ifdef _WIN32
 const char *const kPathSeparator = "\\";
 #else
@@ -326,6 +332,8 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
   base_path_ = joinPath(dir_, base_name_ + suffix_);
   writes_since_check_ = 0;
   last_check_ = std::chrono::steady_clock::now();
+  rotate_failures_ = 0;
+  dir_reported_missing_ = false;
 
   if (!openFileLocked()) {
     return false;
@@ -362,9 +370,17 @@ void Logger::writeRaw(const char *data, std::size_t length) {
 bool Logger::openFileLocked() {
   file_ = std::fopen(base_path_.c_str(), "ab");
   if (!file_) {
-    if (!open_error_reported_) {
+    const int error = errno;
+
+    // The first failure is always worth a line. After the process removed the
+    // directory itself, a directory that is still missing is the state it
+    // expects and is reported by reopenIfReplacedLocked once; anything else,
+    // a full or read only directory for instance, can come back, so say so
+    // again instead of losing every later failure.
+    const bool directory_missing = dir_reported_missing_ && error == ENOENT;
+    if (!open_error_reported_ || !directory_missing) {
       std::fprintf(stderr, "[APP] [%s:%d] failed to open log file %s: %s\n", __FILE__, __LINE__, base_path_.c_str(),
-                   std::strerror(errno));
+                   std::strerror(error));
       open_error_reported_ = true;
     }
     return false;
@@ -404,8 +420,11 @@ void Logger::reopenIfReplacedLocked() {
     std::fprintf(stderr, "[APP] [%s:%d] log file %s disappeared, recreating it\n", __FILE__, __LINE__,
                  base_path_.c_str());
     closeFileLocked();
-    makePath(dir_);
+    if (!makePath(dir_)) {
+      // makePath has said why; keep the reason in mind for openFileLocked.
+    }
     openFileLocked();
+    dir_reported_missing_ = (file_ == nullptr);
     return;
   }
 
@@ -453,12 +472,15 @@ void Logger::writeFileLocked(const char *data, std::size_t length) {
   }
 
   if (current_size_ > 0 && current_size_ + length > max_file_size_) {
-    rotateLocked();
-    if (!file_) {
-      return;
+    if (rotate_failures_ < kMaxRotateFailures) {
+      rotateLocked();
+      if (!file_) {
+        return;
+      }
     }
+    // Otherwise the rename has failed too often and there is nothing left to
+    // try: the line is appended to the current file so it is not lost.
   }
-
   if (std::fwrite(data, 1, length, file_) != length || std::fflush(file_) != 0) {
     std::fprintf(stderr, "[APP] [%s:%d] failed to write log file %s: %s\n", __FILE__, __LINE__, base_path_.c_str(),
                  std::strerror(errno));
@@ -487,12 +509,25 @@ void Logger::rotateLocked() {
   }
   closeFileLocked();
 
+  // The file is left to grow past max_file_size rather than losing what it
+  // holds: the Web page streams the same lines, so a dropped file makes the
+  // two disagree.
   if (pathExists(base_path_)) {
     std::string archive = archivePathLocked();
     if (std::rename(base_path_.c_str(), archive.c_str()) != 0) {
-      std::fprintf(stderr, "[APP] [%s:%d] failed to rename %s to %s: %s\n", __FILE__, __LINE__, base_path_.c_str(),
-                   archive.c_str(), std::strerror(errno));
-      std::remove(base_path_.c_str());
+      const int error = errno;
+      ++rotate_failures_;
+      if (rotate_failures_ < kMaxRotateFailures) {
+        std::fprintf(stderr, "[APP] [%s:%d] failed to rename %s to %s: %s, retrying\n", __FILE__, __LINE__,
+                     base_path_.c_str(), archive.c_str(), std::strerror(error));
+      } else {
+        std::fprintf(stderr,
+                     "[APP] [%s:%d] failed to rename %s to %s: %s; rotation stopped, the log file grows without "
+                     "limit until it is moved or the program restarts\n",
+                     __FILE__, __LINE__, base_path_.c_str(), archive.c_str(), std::strerror(error));
+      }
+    } else {
+      rotate_failures_ = 0;
     }
   }
 
