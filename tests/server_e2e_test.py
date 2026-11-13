@@ -137,10 +137,11 @@ def check_rejected_log_dir(binary, workdir, check):
     udp_port = free_port(socket.SOCK_DGRAM)
     tcp_port = free_port(socket.SOCK_STREAM)
     output_path = os.path.join(workdir, "rejected_stdout.txt")
-    with open(output_path, "wb") as output_file:
+    error_path = os.path.join(workdir, "rejected_stderr.txt")
+    with open(output_path, "wb") as output_file, open(error_path, "wb") as error_file:
         process = subprocess.Popen(
             [binary, "-u", str(udp_port), "-t", str(tcp_port), "-s", "5", "-d", rejected_dir],
-            cwd=workdir, stdout=output_file, stderr=subprocess.STDOUT)
+            cwd=workdir, stdout=output_file, stderr=error_file)
     try:
         conn = wait_for_tcp(tcp_port, time.time() + TIMEOUT)
         check(conn is not None, "the server serves while file logging is refused")
@@ -150,9 +151,10 @@ def check_rejected_log_dir(binary, workdir, check):
         process.kill()
         process.wait()
 
-    with open(output_path, "r", errors="replace") as stream:
+    # The reason goes to stderr; stdout only carries the program's own log.
+    with open(error_path, "r", errors="replace") as stream:
         output = stream.read()
-    check("file logging disabled:" in output, "a refused log directory is reported")
+    check("file logging disabled:" in output, "a refused log directory is reported on stderr")
     check("not on tmpfs or ramfs" in output, "the reason names both file systems")
 
 
@@ -216,14 +218,18 @@ def main():
     log_dir = os.path.join(workdir, "log")
     args += ["-d", log_dir]
 
-    print("running: %s (cwd=%s, web=%s)" % (" ".join(args), workdir, web_type))
+    stderr_path = os.path.join(workdir, "stderr.txt")
     log_path = os.path.join(workdir, "stdout.txt")
-    with open(log_path, "wb") as stdout_file:
+    # stdout and stderr apart: a failure has to say which one a line came
+    # from, and a check that tolerates an empty stdout must not report a
+    # passing run as a failure.
+    print("running: %s (cwd=%s, web=%s)" % (" ".join(args), workdir, web_type))
+    with open(log_path, "wb") as stdout_file, open(stderr_path, "wb") as stderr_file:
         process = subprocess.Popen(
             args,
             cwd=workdir,
             stdout=stdout_file,
-            stderr=subprocess.STDOUT,
+            stderr=stderr_file,
         )
 
     try:
@@ -317,8 +323,12 @@ def main():
         udp.close()
         conn.close()
 
+        # stderr is separate now; a refusal or an error there explains a run
+        # whose stdout never mentions the log file, so print it with a failure.
         with open(log_path, "r", errors="replace") as stdout_file:
             output = stdout_file.read()
+        with open(stderr_path, "r", errors="replace") as stderr_file:
+            error_output = stderr_file.read()
 
         if sys.platform != "win32":
             process.send_signal(signal.SIGINT)
@@ -340,6 +350,8 @@ def main():
         else:
             expect_files = is_temporary_fs(os.path.dirname(os.path.abspath(log_dir)))
         wrote_files = "Log file path" in output
+        if not wrote_files and error_output:
+            print("server stderr:\n%s" % error_output)
         check(wrote_files == expect_files,
               "file logging follows the temporary file system gate (expected=%s, actual=%s)"
               % (expect_files, wrote_files))
@@ -358,6 +370,12 @@ def main():
         try:
             with open(log_path, "r", errors="replace") as stdout_file:
                 print(stdout_file.read())
+        except OSError:
+            pass
+        try:
+            with open(stderr_path, "r", errors="replace") as stderr_file:
+                print("server stderr:")
+                print(stderr_file.read())
         except OSError:
             pass
         shutil.rmtree(workdir, ignore_errors=True)
