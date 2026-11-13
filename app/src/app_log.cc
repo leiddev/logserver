@@ -434,10 +434,10 @@ void Logger::reopenIfReplacedLocked() {
     std::fprintf(stderr, "[%s] [%s:%d] log file %s disappeared, recreating it\n", applog::Logger::appName(),
                  __FILE__, __LINE__, base_path_.c_str());
     closeFileLocked();
-    if (!makePath(dir_)) {
-      // makePath has said why; keep the reason in mind for openFileLocked.
-    }
+    makePath(dir_);
     openFileLocked();
+    // A directory that is still gone is the expected state here, and the line
+    // above already said so; openFileLocked keeps quiet about repeats of it.
     dir_reported_missing_ = (file_ == nullptr);
     return;
   }
