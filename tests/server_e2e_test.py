@@ -72,15 +72,16 @@ def recv_until(sock, expected, timeout):
     return data
 
 
-def is_tmpfs(path):
+def is_temporary_fs(path):
+    """Whether initFile accepts path: tmpfs or ramfs, and always on Windows."""
     if sys.platform == "win32":
-        # Windows has no tmpfs; isTempFS() returns true there by design.
+        # Windows has no tmpfs; the check is a no-op there by design.
         return True
     try:
         output = subprocess.check_output(["stat", "-f", "-c", "%T", path], text=True)
     except Exception:
         return False
-    return output.strip() == "tmpfs"
+    return output.strip() in ("tmpfs", "ramfs")
 
 
 def fetch_page(port):
@@ -175,6 +176,11 @@ def main():
     args = [binary, "-u", str(udp_port), "-t", str(tcp_port), "-s", "5"]
     if web_type != "NONE":
         args += ["-w", str(web_port)]
+
+    # Point -d at the work directory: never the default, so a run cannot
+    # leave logs in /tmp/log or write next to the checkout.
+    log_dir = os.path.join(workdir, "log")
+    args += ["-d", log_dir]
 
     print("running: %s (cwd=%s, web=%s)" % (" ".join(args), workdir, web_type))
     log_path = os.path.join(workdir, "stdout.txt")
@@ -277,6 +283,9 @@ def main():
         udp.close()
         conn.close()
 
+        with open(log_path, "r", errors="replace") as stdout_file:
+            output = stdout_file.read()
+
         if sys.platform != "win32":
             process.send_signal(signal.SIGINT)
             try:
@@ -290,18 +299,18 @@ def main():
             process.terminate()
             process.wait(timeout=TIMEOUT)
 
-        # File logging is enabled only when the log directory is on a tmpfs,
-        # and the server says so by printing the path it opened.
+        # File logging is enabled only when the log directory is on a tmpfs or
+        # a ramfs, and the server says so by printing the path it opened.
         if sys.platform == "win32":
             expect_files = True
         else:
-            expect_files = is_tmpfs("/tmp")
-        with open(log_path, "r", errors="replace") as stdout_file:
-            output = stdout_file.read()
+            expect_files = is_temporary_fs(os.path.dirname(os.path.abspath(log_dir)))
         wrote_files = "Log file path" in output
         check(wrote_files == expect_files,
-              "file logging follows the tmpfs gate (expected=%s, actual=%s)"
+              "file logging follows the temporary file system gate (expected=%s, actual=%s)"
               % (expect_files, wrote_files))
+        check(not expect_files or "Log file path: " + log_dir in output,
+              "-d puts the log file in the directory it names")
     finally:
         if process.poll() is None:
             process.kill()

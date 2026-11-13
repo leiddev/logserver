@@ -36,7 +36,15 @@ static bool log_msg = false;
 int main(int argc, char *argv[]) {
   const std::string app_name{APP_NAME};
 
+#ifdef _WIN32
+  const std::string default_log_dir = ".\\log\\";
+#else
+  // /tmp is a tmpfs on most systems, which is what initFile requires.
+  const std::string default_log_dir = "/tmp/log/";
+#endif
+
   cmdline::parser cmdl;
+  cmdl.add<std::string>("log_dir", 'd', "Log file directory", false, default_log_dir);
   cmdl.add<int>("udp_port", 'u', "UDP port number", false, 11000, cmdline::range(1, 65535));
   cmdl.add<int>("tcp_port", 't', "TCP port number", false, 11000, cmdline::range(1, 65535));
   cmdl.add<int>("max_files", 's', "Maximum number of files", false, 100, cmdline::range(0, 1000));
@@ -67,11 +75,7 @@ int main(int argc, char *argv[]) {
   size_t max_log_file_size = 1024 * 1024;
   size_t max_log_files = cmdl.get<int>("max_files");
 
-#ifdef _WIN32
-  std::string log_file_path = ".\\log\\";
-#else
-  std::string log_file_path = "/tmp/log/";
-#endif
+  std::string log_file_path = cmdl.get<std::string>("log_dir");
 
   applog::Logger &logger = applog::Logger::instance();
   logger.setLevel(applog::kTrace);

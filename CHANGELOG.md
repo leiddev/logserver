@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 `-d/--log_dir`，可指定日志目录，默认仍为 Linux 的 `/tmp/log/` 与 Windows 的 `.\log\`；嵌入式部署不必再修改源码重编译。`--help` 会显示默认路径。
+
 ## [V0.8.12] - 2026-11-11
 
 ### Added

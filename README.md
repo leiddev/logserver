@@ -14,7 +14,7 @@
 
 - 可设置接收日志的 UDP 端口号；
 - 可设置对外提供日志的 TCP 服务端口号；
-- 抓取到的日志信息会保存在 `/tmp/log/` 目录里面（Windows 下为 `.\log\`），仅当该目录为临时文件系统 `tmpfs` 时落盘，避免在嵌入式设备上写 flash（Windows 下无此限制，始终落盘）；
+- 抓取到的日志信息默认保存在 `/tmp/log/` 目录里面（Windows 下为 `.\log\`），可用 `-d/--log_dir` 另行指定；仅当该目录为临时文件系统 `tmpfs` 或 `ramfs` 时落盘，避免在嵌入式设备上写 flash（Windows 下无此限制，始终落盘）；
 - 日志文件按照 1MB 大小自动切分，归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.txt`；文件后缀可在 `txt`（默认）与 `log` 之间选择；
 - 可设置最大保存文件数量，当前文件与归档文件的总数超过该值后，删除最旧的归档文件；
 - 可设置是否显示接收到的日志信息；
@@ -28,6 +28,7 @@
 ```
 usage: ./LogServer [options] ...
 options:
+  -d, --log_dir      Log file directory (string [=/tmp/log/])
   -u, --udp_port     UDP port number (int [=11000])
   -t, --tcp_port     TCP port number (int [=11000])
   -s, --max_files    Maximum number of files (int [=100])
@@ -40,6 +41,7 @@ options:
 **日志文件说明：**
 
 - 日志文件后缀由 `-x/--log_suffix` 决定，可取 `txt`（默认）或 `log`，只接受这两个值；
+- 日志目录由 `-d/--log_dir` 决定，默认 Linux 下为 `/tmp/log/`、Windows 下为 `.\log\`；相对路径按当前工作目录解析；
 - 正在写入的文件固定为 `logserver.txt`（使用 `-x log` 时为 `logserver.log`），可用 `tail -f` 持续查看；
 - 当前文件超过 1MB 时，先按本地日期时间（精确到毫秒）改名为归档文件，例如 `logserver_20261109_143005_123.txt`，再重新创建当前文件；
 - 若同一毫秒内发生多次切分，归档文件名会追加三位序号以避免覆盖，例如 `logserver_20261109_143005_123_001.txt`；
@@ -48,7 +50,7 @@ options:
 - 运行期间若当前文件被外部删除、改名或所在目录被删除，程序会自动重建并继续写入（最多延迟 32 条日志或 1 秒）；若文件被原地截断（如 logrotate 的 `copytruncate`），程序会重新同步大小继续追加，不会误触发切分。该检测仅在 Linux 等 POSIX 平台生效，Windows 下已打开的文件无法被删除；
 - 程序自身的运行日志带 `[LogServer] ` 前缀（`APP_NAME` 加方括号），与接收到的日志保存在同一个文件里；接收到的日志按原始内容写入，不添加前缀、时间戳或换行；
 - 接收到的日志是否同时输出到控制台由 `--disp_msg` 控制；
-- 文件日志未能启用时（日志目录不在 tmpfs 上、路径被同名文件占用、目录无法创建等），启动时会向 stderr 输出以 `file logging disabled:` 开头的原因说明；`-s 0` 属于主动关闭，不会有提示。
+- 文件日志未能启用时（日志目录不在 `tmpfs`/`ramfs` 上、路径被同名文件占用、目录无法创建等），启动时会向 stderr 输出以 `file logging disabled:` 开头的原因说明；`-s 0` 属于主动关闭，不会有提示。
 
 **Web 服务器可选配置：**
 
@@ -164,7 +166,7 @@ cd build && ctest --output-on-failure
 ```
 
 - `app_log`：日志格式化、原始写入保真、`initFile` 守卫、切分与保留策略、重启追加等单元测试。写文件的用例需要 tmpfs，Linux 上使用 `/dev/shm`，Windows 上使用 `%TEMP%`。
-- `server_e2e`：启动真实进程，校验 UDP→TCP 转发、SSE 推送、HTTP 页面、`SIGINT` 正常退出，以及文件日志是否遵循 tmpfs 门槛。
+- `server_e2e`：启动真实进程，校验 UDP→TCP 转发、SSE 推送、HTTP 页面、`SIGINT` 正常退出，以及文件日志是否遵循临时文件系统门槛。
 - `web_frontend`：SSE/WebSocket 前端的稳定性与健壮性——停滞的浏览器被剔除且不阻塞转发、事件完整有序、中途断开、畸形请求、连接抖动。
 - `web_ui`：用 Playwright 驱动真实 Chromium 打开页面，验证状态圆点与启动/停止按钮、逐行渲染与 HTML 转义、60 KB 长行、清空（含尚未刷新的批次）、10000 行上限与 10 万行后的 DOM 与 JavaScript 堆稳定、自动滚动、保存下载、关于对话框，以及服务端消失后的三次重连与放弃。默认不启用，因为 Playwright 需要下载 Chromium：先 `pip install playwright` 与 `python -m playwright install chromium`，再在配置时加 `-DLOG_SERVER_UI_TESTS=ON`。
 - `transport_stability`：UDP 生产接口与 TCP 消费接口的专项测试——1000 条带序号数据报的顺序/完整性/丢包率、65507 字节最大报文、空报文、多生产者、字节级保真；TCP 多消费者扇出、慢消费者被剔除、中途断开、洪泛下连接抖动、分片写入的回显、带活跃连接退出。三个 `WEBSERVER_TYPE` 变体都会运行。
