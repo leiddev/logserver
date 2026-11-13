@@ -78,6 +78,7 @@ int main(int argc, char *argv[]) {
   std::string log_file_path = cmdl.get<std::string>("log_dir");
 
   applog::Logger &logger = applog::Logger::instance();
+  logger.setAppName(APP_NAME);
   logger.setLevel(applog::kTrace);
   log_msg = logger.initFile(log_file_path, log_file_name, max_log_file_size, max_log_files, log_file_suffix);
   if (log_msg) {

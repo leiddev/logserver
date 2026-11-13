@@ -59,6 +59,11 @@ class Logger {
  public:
   static Logger &instance();
 
+  // Name the prefix of the messages the logger prints about itself, i.e.
+  // "[LogServer] ". Defaults to "APP"; call it once before initFile.
+  static void setAppName(const char *name);
+  static const char *appName();
+
   void setLevel(Level level);
 
   // Enable file logging: <dir>/<base_name><suffix> is the current file, and

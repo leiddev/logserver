@@ -71,7 +71,8 @@ bool pathExists(const std::string &path) {
 // File logging is not usable while initFile runs (it holds the logger mutex and
 // no file is open yet), so failures there are reported on stderr directly.
 void reportDisabled(const char *file, int line, const std::string &message) {
-  std::fprintf(stderr, "[APP] [%s:%d] file logging disabled: %s\n", file, line, message.c_str());
+  std::fprintf(stderr, "[%s] [%s:%d] file logging disabled: %s\n", applog::Logger::appName(), file, line,
+               message.c_str());
 }
 
 #ifdef _WIN32
@@ -285,9 +286,22 @@ std::string vformat(const char *format, std::size_t arg_count, const std::string
   return result;
 }
 
+namespace {
+// One name per process: set once at startup, read by every report.
+std::string g_app_name = "APP";
+}  // namespace
+
 Logger &Logger::instance() {
   static Logger logger;
   return logger;
+}
+
+void Logger::setAppName(const char *name) {
+  g_app_name = (name && *name) ? name : "APP";
+}
+
+const char *Logger::appName() {
+  return g_app_name.c_str();
 }
 
 Logger::~Logger() {
@@ -379,8 +393,8 @@ bool Logger::openFileLocked() {
     // again instead of losing every later failure.
     const bool directory_missing = dir_reported_missing_ && error == ENOENT;
     if (!open_error_reported_ || !directory_missing) {
-      std::fprintf(stderr, "[APP] [%s:%d] failed to open log file %s: %s\n", __FILE__, __LINE__, base_path_.c_str(),
-                   std::strerror(error));
+      std::fprintf(stderr, "[%s] [%s:%d] failed to open log file %s: %s\n", applog::Logger::appName(), __FILE__,
+                   __LINE__, base_path_.c_str(), std::strerror(error));
       open_error_reported_ = true;
     }
     return false;
@@ -417,8 +431,8 @@ void Logger::reopenIfReplacedLocked() {
   struct stat path_info;
   if (::stat(base_path_.c_str(), &path_info) != 0) {
     // The file, or its whole directory, was removed from outside.
-    std::fprintf(stderr, "[APP] [%s:%d] log file %s disappeared, recreating it\n", __FILE__, __LINE__,
-                 base_path_.c_str());
+    std::fprintf(stderr, "[%s] [%s:%d] log file %s disappeared, recreating it\n", applog::Logger::appName(),
+                 __FILE__, __LINE__, base_path_.c_str());
     closeFileLocked();
     if (!makePath(dir_)) {
       // makePath has said why; keep the reason in mind for openFileLocked.
@@ -437,8 +451,8 @@ void Logger::reopenIfReplacedLocked() {
 
   if (path_info.st_dev != fd_info.st_dev || path_info.st_ino != fd_info.st_ino) {
     // Removed and replaced, or renamed away with a new file at the same path.
-    std::fprintf(stderr, "[APP] [%s:%d] log file %s was replaced, reopening it\n", __FILE__, __LINE__,
-                 base_path_.c_str());
+    std::fprintf(stderr, "[%s] [%s:%d] log file %s was replaced, reopening it\n", applog::Logger::appName(),
+                 __FILE__, __LINE__, base_path_.c_str());
     closeFileLocked();
     openFileLocked();
     return;
@@ -482,8 +496,8 @@ void Logger::writeFileLocked(const char *data, std::size_t length) {
     // try: the line is appended to the current file so it is not lost.
   }
   if (std::fwrite(data, 1, length, file_) != length || std::fflush(file_) != 0) {
-    std::fprintf(stderr, "[APP] [%s:%d] failed to write log file %s: %s\n", __FILE__, __LINE__, base_path_.c_str(),
-                 std::strerror(errno));
+    std::fprintf(stderr, "[%s] [%s:%d] failed to write log file %s: %s\n", applog::Logger::appName(), __FILE__,
+                 __LINE__, base_path_.c_str(), std::strerror(errno));
     closeFileLocked();
     return;
   }
@@ -518,13 +532,14 @@ void Logger::rotateLocked() {
       const int error = errno;
       ++rotate_failures_;
       if (rotate_failures_ < kMaxRotateFailures) {
-        std::fprintf(stderr, "[APP] [%s:%d] failed to rename %s to %s: %s, retrying\n", __FILE__, __LINE__,
-                     base_path_.c_str(), archive.c_str(), std::strerror(error));
+        std::fprintf(stderr, "[%s] [%s:%d] failed to rename %s to %s: %s, retrying\n", applog::Logger::appName(),
+                     __FILE__, __LINE__, base_path_.c_str(), archive.c_str(), std::strerror(error));
       } else {
         std::fprintf(stderr,
-                     "[APP] [%s:%d] failed to rename %s to %s: %s; rotation stopped, the log file grows without "
+                     "[%s] [%s:%d] failed to rename %s to %s: %s; rotation stopped, the log file grows without "
                      "limit until it is moved or the program restarts\n",
-                     __FILE__, __LINE__, base_path_.c_str(), archive.c_str(), std::strerror(error));
+                     applog::Logger::appName(), __FILE__, __LINE__, base_path_.c_str(), archive.c_str(),
+                     std::strerror(error));
       }
     } else {
       rotate_failures_ = 0;
@@ -550,8 +565,8 @@ void Logger::cleanupLocked() {
   std::size_t total = archives.size() + (pathExists(base_path_) ? 1 : 0);
   for (std::size_t i = 0; total > max_files_ && i < archives.size(); ++i) {
     if (std::remove(archives[i].c_str()) != 0) {
-      std::fprintf(stderr, "[APP] [%s:%d] failed to remove %s: %s\n", __FILE__, __LINE__, archives[i].c_str(),
-                   std::strerror(errno));
+      std::fprintf(stderr, "[%s] [%s:%d] failed to remove %s: %s\n", applog::Logger::appName(), __FILE__,
+                   __LINE__, archives[i].c_str(), std::strerror(errno));
       return;
     }
     --total;
