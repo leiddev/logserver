@@ -628,9 +628,9 @@ TEST_CASE("cleanup removes only this base name") {
 }
 
 TEST_CASE("a failed rename keeps the file instead of removing it") {
-#ifdef _WIN32
-  // Deleting a file that is open for writing fails on Windows, so the
-  // directory cannot be made read only under the running logger.
+#ifndef __linux__
+  // Fails the rename has to be forced with a permission bit, which is left
+  // untested on a Windows runner: there the check would only pass.
   return;
 #else
   if (::geteuid() == 0) {
@@ -689,11 +689,14 @@ TEST_CASE("initFile refuses a directory that is not a temporary file system") {
   }
   const std::string dir = "/logserver_unsupported_fs_test/";
 
-  // The parent is the root directory: refuse the path without depending on
-  // whether this run may create or remove anything there.
+  // Running as root with / writable takes part fully: initFile must refuse
+  // the path before it creates anything, and the directory must stay absent.
+  // Otherwise only the refusal is checked, as the run may not be allowed to
+  // create or remove anything in /.
+  const bool can_create = ::geteuid() == 0 && ::access("/", W_OK) == 0;
   applog::Logger &logger = applog::Logger::instance();
   CHECK(!logger.initFile(dir, "logserver", 1024, 5));
-  CHECK(::access(dir.c_str(), F_OK) != 0 || ::access("/", W_OK) == 0);
+  CHECK(!can_create || ::access(dir.c_str(), F_OK) != 0);
 #endif
 }
 
