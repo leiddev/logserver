@@ -687,23 +687,34 @@ TEST_CASE("initFile refuses a directory that is not a temporary file system") {
   if (root_info.f_type == TMPFS_MAGIC || root_info.f_type == RAMFS_MAGIC) {
     return;  // a container with / on tmpfs; nothing to refuse here
   }
-  const std::string dir = "/logserver_unsupported_fs_test/";
 
-  // A non-root run cannot create the directory, and whether it can look
-  // at / depends on the mount, so only the refusal is checked there.
-  if (::access("/", W_OK) != 0) {
-    applog::Logger &logger = applog::Logger::instance();
-    CHECK(!logger.initFile(dir, "logserver", 1024, 5));
-    return;
+  // The path has to exist to be refused: a missing one under / is turned down
+  // by makePath for a reason of its own. It is created here only where that
+  // is possible (a writable /, i.e. root) and removed again afterwards; when
+  // it cannot be created, only the refusal is checked.
+  const std::string dir = "/logserver_unsupported_fs_test/";
+  const std::string marker = "logserver_marker.txt";
+  removeDir(dir);
+  makeDir(dir);
+  const bool created = ::access(dir.c_str(), F_OK) == 0;
+  if (created) {
+    std::FILE *file = std::fopen((dir + marker).c_str(), "wb");
+    CHECK(file != nullptr);
+    if (file) {
+      std::fclose(file);
+    }
   }
 
-  // Root: initFile refuses the path before it creates anything, and nothing
-  // is left behind - the refusal must not leave the directory it made.
-  const std::vector<std::string> before = listFiles("/");
   applog::Logger &logger = applog::Logger::instance();
   CHECK(!logger.initFile(dir, "logserver", 1024, 5));
-  const std::vector<std::string> after = listFiles("/");
-  CHECK(before == after);
+
+  // Nothing may be written into the directory that was refused.
+  CHECK(fileSize(dir + currentFile()) < 0);
+
+  if (created) {
+    CHECK(::access((dir + marker).c_str(), F_OK) == 0);
+  }
+  removeDir(dir);
 #endif
 }
 
