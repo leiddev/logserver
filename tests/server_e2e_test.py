@@ -122,6 +122,40 @@ def websocket_connect(port):
     return conn
 
 
+def check_rejected_log_dir(binary, workdir, check):
+    """A log directory that is not on tmpfs or ramfs is refused, and said so.
+
+    The server keeps running without file logging; the point is that the
+    refusal reaches stderr with a reason instead of passing silently.
+    """
+    rejected_dir = os.path.join(workdir, "rejected")
+    if is_temporary_fs(os.path.dirname(os.path.abspath(workdir))):
+        # Nothing in the work directory can be refused here.
+        return
+    os.makedirs(rejected_dir)
+
+    udp_port = free_port(socket.SOCK_DGRAM)
+    tcp_port = free_port(socket.SOCK_STREAM)
+    output_path = os.path.join(workdir, "rejected_stdout.txt")
+    with open(output_path, "wb") as output_file:
+        process = subprocess.Popen(
+            [binary, "-u", str(udp_port), "-t", str(tcp_port), "-s", "5", "-d", rejected_dir],
+            cwd=workdir, stdout=output_file, stderr=subprocess.STDOUT)
+    try:
+        conn = wait_for_tcp(tcp_port, time.time() + TIMEOUT)
+        check(conn is not None, "the server serves while file logging is refused")
+        if conn is not None:
+            conn.close()
+    finally:
+        process.kill()
+        process.wait()
+
+    with open(output_path, "r", errors="replace") as stream:
+        output = stream.read()
+    check("file logging disabled:" in output, "a refused log directory is reported")
+    check("not on tmpfs or ramfs" in output, "the reason names both file systems")
+
+
 def read_ws_frame(conn, timeout=5):
     """Read one server-to-client frame and return its payload, or None."""
     conn.settimeout(timeout)
@@ -311,6 +345,9 @@ def main():
               % (expect_files, wrote_files))
         check(not expect_files or "Log file path: " + log_dir in output,
               "-d puts the log file in the directory it names")
+
+        if sys.platform != "win32":
+            check_rejected_log_dir(binary, workdir, check)
     finally:
         if process.poll() is None:
             process.kill()

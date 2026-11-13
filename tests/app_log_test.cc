@@ -22,7 +22,9 @@
 #include <windows.h>
 #else
 #include <dirent.h>
+#include <linux/magic.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <unistd.h>
 #endif
 
@@ -623,6 +625,88 @@ TEST_CASE("cleanup removes only this base name") {
   }
   CHECK_EQ(std::size_t(2), log_files);
   CHECK(keep_me_present);
+}
+
+TEST_CASE("a failed rename keeps the file instead of removing it") {
+#ifdef _WIN32
+  // Deleting a file that is open for writing fails on Windows, so the
+  // directory cannot be made read only under the running logger.
+  return;
+#else
+  const std::string dir = prepareDir("rename_fails");
+  applog::Logger &logger = applog::Logger::instance();
+  CHECK(logger.initFile(dir, "logserver", 1024, 5));
+
+  std::string chunk(99, 'R');
+  chunk += '\n';
+  for (int i = 0; i < 20; ++i) {
+    logger.writeRaw(chunk.data(), chunk.size());
+  }
+
+  // Without write permission on the directory the archive cannot be created.
+  CHECK_EQ(0, ::chmod(dir.c_str(), 0500));
+  for (int i = 0; i < 100; ++i) {
+    logger.writeRaw(chunk.data(), chunk.size());
+  }
+  CHECK_EQ(0, ::chmod(dir.c_str(), 0700));
+
+  // Nothing was lost: the file is still there and larger than one rotation.
+  CHECK(fileSize(dir + currentFile()) > 1024);
+  std::string content;
+  CHECK(readFile(dir + currentFile(), &content));
+  CHECK(onlyWholeRecords(content, chunk.size()));
+
+  // Once the directory is writable again the next rotation archives the file.
+  for (int i = 0; i < 40; ++i) {
+    logger.writeRaw(chunk.data(), chunk.size());
+  }
+  bool archived = false;
+  const std::vector<std::string> files = listFiles(dir);
+  for (std::size_t i = 0; i < files.size(); ++i) {
+    if (isArchiveName(files[i], kDefaultSuffix)) {
+      archived = true;
+    }
+  }
+  CHECK(archived);
+#endif
+}
+
+TEST_CASE("initFile refuses a directory that is not a temporary file system") {
+#ifndef __linux__
+  // The gate only exists where statfs() reports the file system type.
+  return;
+#else
+  struct statfs root_info;
+  CHECK_EQ(0, ::statfs("/", &root_info));
+  if (root_info.f_type == TMPFS_MAGIC || root_info.f_type == RAMFS_MAGIC) {
+    return;  // a container with / on tmpfs; nothing to refuse here
+  }
+
+  const std::string dir = "/logserver_unsupported_fs_test/";
+  applog::Logger &logger = applog::Logger::instance();
+  CHECK(!logger.initFile(dir, "logserver", 1024, 5));
+
+  // The refusal must not have left a directory behind.
+  CHECK(::access(dir.c_str(), F_OK) != 0);
+#endif
+}
+
+TEST_CASE("initFile fails on a directory it cannot create") {
+#ifndef __linux__
+  return;  // a root process ignores the permission bits
+#else
+  if (::geteuid() == 0) {
+    return;
+  }
+  const std::string parent = prepareDir("readonly_parent");
+  CHECK_EQ(0, ::chmod(parent.c_str(), 0500));
+
+  applog::Logger &logger = applog::Logger::instance();
+  const bool created = logger.initFile(parent + "child" + kPathSeparator, "logserver", 1024, 5);
+  CHECK_EQ(0, ::chmod(parent.c_str(), 0700));
+  CHECK(!created);
+  CHECK(::access((parent + "child").c_str(), F_OK) != 0);
+#endif
 }
 
 int main() {
