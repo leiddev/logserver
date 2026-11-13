@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [V0.8.13] - 2026-11-13
+
 ### Added
 
 - 新增 `-d/--log_dir`，可指定日志目录，默认仍为 Linux 的 `/tmp/log/` 与 Windows 的 `.\log\`；嵌入式部署不必再修改源码重编译。`--help` 会显示默认路径。
@@ -20,6 +22,10 @@
 
 - 日志切分时归档改名失败（目录被填满、只读等）此前会直接删掉当前日志文件，等于把内容丢掉；现在保留文件继续追加，最多重试 3 次后停止切分并明确提示“日志文件将持续增长”，直到文件被移走或程序重启。
 - 日志文件打开失败的提示此前每进程只打印一次，空间不足、目录只读这类会反复出现的问题看不到后续状态；现在除“刚重建过目录、目录仍不存在”这一预期情况外都会再次提示。
+
+### Verified
+
+- Windows（MSVC 2022）三个 `WEBSERVER_TYPE` 变体全部测试通过；银河麒麟 V10 SP1（gcc 9.3）原生编译后 6 项测试全部通过；用 `3516.toolchain.cmake` 交叉编译出 ARM（arm-himix200，glibc 2.9）可执行文件，并在 Hi3516 设备（Linux 4.9，glibc 2.24）上实跑：`--help`、启动、TCP 欢迎语、HTTP 200、WebSocket 101 握手与日志落盘均正常。
 
 ## [V0.8.12] - 2026-11-11
 
@@ -283,7 +289,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.12...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.13...HEAD
+[V0.8.13]: https://github.com/leiddev/logserver/releases/tag/v0.8.13
 [V0.8.12]: https://github.com/leiddev/logserver/releases/tag/v0.8.12
 [V0.8.11]: https://github.com/leiddev/logserver/releases/tag/v0.8.11
 [V0.8.10]: https://github.com/leiddev/logserver/releases/tag/v0.8.10
