@@ -185,12 +185,15 @@ bool checkTemporaryFs(const std::string &path) {
     reportDisabled(__FILE__, __LINE__, "cannot stat " + path + ": " + std::strerror(error));
     return false;
   }
-  if (fs_info.f_type != TMPFS_MAGIC) {
+  // tmpfs and ramfs both live in RAM and never reach the flash. ramfs has no
+  // size limit of its own, so max_files and max_file_size are what keep it
+  // bounded.
+  if (fs_info.f_type != TMPFS_MAGIC && fs_info.f_type != RAMFS_MAGIC) {
     char buffer[32] = {0};
     std::snprintf(buffer, sizeof(buffer), "0x%lx", static_cast<unsigned long>(fs_info.f_type));
     reportDisabled(__FILE__, __LINE__,
-                   path + " is not on tmpfs (file system type " + buffer +
-                       "); point the log directory at a tmpfs or use -s 0");
+                   path + " is not on tmpfs or ramfs (file system type " + buffer +
+                       "); point -d at one or use -s 0");
     return false;
   }
   return true;

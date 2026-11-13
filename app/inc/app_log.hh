@@ -67,7 +67,8 @@ class Logger {
   // when two rotations land in the same millisecond.
   // At most max_files files (current file included) are kept.
   // Returns false when max_files is zero or dir is not on a temporary file
-  // system (writing flash on embedded devices should be avoided).
+  // system, tmpfs or ramfs (writing flash on embedded devices should be
+  // avoided).
   bool initFile(const std::string &dir, const std::string &base_name, std::size_t max_file_size,
                 std::size_t max_files, const std::string &suffix = ".txt");
 
