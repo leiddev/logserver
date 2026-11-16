@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [V0.8.14] - 2026-11-16
+
+### Added
+
+- 新增 `--allow_any_fs`，关闭“日志目录必须位于 `tmpfs` 或 `ramfs`”的限制，把日志写到任意文件系统。加该选项时启动日志打印 `File system check: disabled`；`-s 0` 仍然优先，完全不写文件。被拒绝时的 stderr 提示也从 `point -d at one or use -s 0` 改为多给出这一个选项。
+
+### Verified
+
+- 银河麒麟 V10 SP1（gcc 9.3.0）原生编译后 6 项测试全部通过；在 ext4 与 tmpfs 上实测：默认拒绝 ext4、加 `--allow_any_fs` 后落盘并打印 `File system check: disabled`、tmpfs 上行为不变、`-s 0` 优先且不建目录。
+- 用 `arm-himix200-linux`（gcc 6.3.0）交叉编译出 ARM 可执行文件（glibc 2.9），在 Hi3516 设备（Linux 4.9.37，glibc 2.24，`/` 为 yaffs2、`/tmp` 为 tmpfs）上实跑：默认拒绝写入 flash（识别为 `0x5941ff53`），`--allow_any_fs` 后成功落盘；UDP 收日志、TCP 欢迎语、Web 页面 HTTP 200、按 1MB 切分与 `-s` 保留策略均正常。
+
 ## [V0.8.13] - 2026-11-13
 
 ### Added
@@ -289,7 +300,8 @@
 - 新增 `LogServer.service`，便于以 systemd 服务方式运行。
 - 新增 `-DSPDLOG_COMPILED_LIB`，以编译库方式使用 spdlog。
 
-[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.13...HEAD
+[Unreleased]: https://github.com/leiddev/logserver/compare/v0.8.14...HEAD
+[V0.8.14]: https://github.com/leiddev/logserver/releases/tag/v0.8.14
 [V0.8.13]: https://github.com/leiddev/logserver/releases/tag/v0.8.13
 [V0.8.12]: https://github.com/leiddev/logserver/releases/tag/v0.8.12
 [V0.8.11]: https://github.com/leiddev/logserver/releases/tag/v0.8.11
