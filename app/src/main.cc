@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
   cmdl.add<int>("max_files", 's', "Maximum number of files", false, 100, cmdline::range(0, 1000));
   cmdl.add<std::string>("log_suffix", 'x', "Log file suffix, txt or log", false, "txt",
                         cmdline::oneof<std::string>("txt", "log"));
+  cmdl.add("allow_any_fs", '\0', "write the log file on any file system, not only tmpfs or ramfs");
   cmdl.add("disp_msg", '\0', "display receive message");
 #if ENABLE_WEB_SERVER != 0
   cmdl.add<int>("web_port", 'w', "Web port number", false, 11001, cmdline::range(1, 65535));
@@ -80,9 +81,13 @@ int main(int argc, char *argv[]) {
   applog::Logger &logger = applog::Logger::instance();
   logger.setAppName(APP_NAME);
   logger.setLevel(applog::kTrace);
-  log_msg = logger.initFile(log_file_path, log_file_name, max_log_file_size, max_log_files, log_file_suffix);
+  const bool check_fs = !cmdl.exist("allow_any_fs");
+  log_msg = logger.initFile(log_file_path, log_file_name, max_log_file_size, max_log_files, log_file_suffix, check_fs);
   if (log_msg) {
     LOG_INFO("Log file path: {}\n", logger.filePath());
+  }
+  if (!check_fs) {
+    LOG_INFO("File system check: disabled\n");
   }
 
   uint16_t udp_server_port = cmdl.get<int>("udp_port");

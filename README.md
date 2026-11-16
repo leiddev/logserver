@@ -14,7 +14,7 @@
 
 - 可设置接收日志的 UDP 端口号；
 - 可设置对外提供日志的 TCP 服务端口号；
-- 抓取到的日志信息默认保存在 `/tmp/log/` 目录里面（Windows 下为 `.\log\`），可用 `-d/--log_dir` 另行指定；仅当该目录为临时文件系统 `tmpfs` 或 `ramfs` 时落盘，避免在嵌入式设备上写 flash（Windows 下无此限制，始终落盘）；
+- 抓取到的日志信息默认保存在 `/tmp/log/` 目录里面（Windows 下为 `.\log\`），可用 `-d/--log_dir` 另行指定；仅当该目录为临时文件系统 `tmpfs` 或 `ramfs` 时落盘，避免在嵌入式设备上写 flash，可用 `--allow_any_fs` 关闭该限制（Windows 下无此限制，始终落盘）；
 - 日志文件按照 1MB 大小自动切分，归档文件以本地日期时间命名，例如 `logserver_20261109_143005_123.txt`；文件后缀可在 `txt`（默认）与 `log` 之间选择；
 - 可设置最大保存文件数量，当前文件与归档文件的总数超过该值后，删除最旧的归档文件；
 - 可设置是否显示接收到的日志信息；
@@ -33,6 +33,7 @@ options:
   -t, --tcp_port     TCP port number (int [=11000])
   -s, --max_files    Maximum number of files (int [=100])
   -x, --log_suffix   Log file suffix, txt or log (string [=txt])
+      --allow_any_fs write the log file on any file system, not only tmpfs or ramfs
       --disp_msg     display receive message
   -w, --web_port     Web port number (int [=11001])
   -?, --help         print this message
@@ -46,6 +47,7 @@ options:
 - 当前文件超过 1MB 时，先按本地日期时间（精确到毫秒）改名为归档文件，例如 `logserver_20261109_143005_123.txt`，再重新创建当前文件；
 - 若同一毫秒内发生多次切分，归档文件名会追加三位序号以避免覆盖，例如 `logserver_20261109_143005_123_001.txt`；
 - 切分时改名失败（目录被填满、只读等）不会删除当前文件：程序保留文件继续追加，最多重试 3 次后停止切分并向 stderr 提示“日志文件将持续增长”，直到文件被移走或程序重启；
+- `--allow_any_fs` 关闭临时文件系统的限制：默认仅当日志目录位于 `tmpfs` 或 `ramfs` 上才落盘，加上该选项后任何文件系统都写，适合日志必须留在磁盘、且已用其他手段（限制 `-s`、定期清理）护住 flash 的场景。启动时会在日志里打印 `File system check: disabled`，便于事后确认启动参数；与 `-s 0` 同时给出时 `-s 0` 优先，仍然完全不写文件；
 - `-s/--max_files` 限制目录中日志文件的总数（当前文件 + 归档文件）。达到上限后每次切分都会删除最旧的归档文件；设为 `0` 表示不写日志文件，此时也不会创建日志目录；
 - 清理只针对当前后缀的归档文件：切换后缀后，另一种后缀的旧文件不会被自动删除；
 - 运行期间若当前文件被外部删除、改名或所在目录被删除，程序会自动重建并继续写入（最多延迟 32 条日志或 1 秒）；若文件被原地截断（如 logrotate 的 `copytruncate`），程序会重新同步大小继续追加，不会误触发切分。该检测仅在 Linux 等 POSIX 平台生效，Windows 下已打开的文件无法被删除；

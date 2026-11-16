@@ -718,6 +718,27 @@ TEST_CASE("initFile refuses a directory that is not a temporary file system") {
 #endif
 }
 
+TEST_CASE("initFile accepts any file system when the check is off") {
+#ifndef __linux__
+  // Without statfs() there is no gate to turn off; the case below is Linux only.
+  return;
+#else
+  // The work root may sit on tmpfs (/dev/shm, or / in a container), where the
+  // check would pass anyway; the case still shows that the flag does not get
+  // in the way. Where it is on a real file system the flag is what lets the
+  // write through.
+  const std::string dir = prepareDir("any_fs");
+  applog::Logger &logger = applog::Logger::instance();
+  logger.setLevel(applog::kTrace);
+  CHECK(logger.initFile(dir, "logserver", 1024 * 1024, 5, ".txt", false));
+
+  logger.writeRaw("any fs\n", 7);
+  std::string content;
+  CHECK(readFile(dir + currentFile(), &content));
+  CHECK_EQ(std::string("any fs\n"), content);
+#endif
+}
+
 TEST_CASE("initFile fails on a directory it cannot create") {
 #ifndef __linux__
   return;  // a root process ignores the permission bits

@@ -71,11 +71,11 @@ class Logger {
   // <dir>/<base_name>_YYYYMMDD_HHMMSS_mmm<suffix>, with a _NNN index appended
   // when two rotations land in the same millisecond.
   // At most max_files files (current file included) are kept.
-  // Returns false when max_files is zero or dir is not on a temporary file
-  // system, tmpfs or ramfs (writing flash on embedded devices should be
-  // avoided).
+  // Returns false when max_files is zero or, with check_fs set, dir is not on a
+  // temporary file system, tmpfs or ramfs (writing flash on embedded devices
+  // should be avoided). check_fs off accepts any file system.
   bool initFile(const std::string &dir, const std::string &base_name, std::size_t max_file_size,
-                std::size_t max_files, const std::string &suffix = ".txt");
+                std::size_t max_files, const std::string &suffix = ".txt", bool check_fs = true);
 
   template <typename... Args>
   void writef(Level level, const char *fmt, const Args &...args) {

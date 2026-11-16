@@ -156,6 +156,44 @@ def check_rejected_log_dir(binary, workdir, check):
         output = stream.read()
     check("file logging disabled:" in output, "a refused log directory is reported on stderr")
     check("not on tmpfs or ramfs" in output, "the reason names both file systems")
+    check("--allow_any_fs" in output, "the reason points at the option that lifts the check")
+
+
+def check_any_fs_log_dir(binary, workdir, check):
+    """--allow_any_fs writes the log file on a file system the check refuses."""
+    rejected_dir = os.path.join(workdir, "any_fs")
+    if is_temporary_fs(os.path.dirname(os.path.abspath(workdir))):
+        # Nothing in the work directory can be refused here, so the flag has
+        # nothing to lift; the unit tests cover the library side.
+        return
+    os.makedirs(rejected_dir)
+
+    udp_port = free_port(socket.SOCK_DGRAM)
+    tcp_port = free_port(socket.SOCK_STREAM)
+    output_path = os.path.join(workdir, "any_fs_stdout.txt")
+    error_path = os.path.join(workdir, "any_fs_stderr.txt")
+    with open(output_path, "wb") as output_file, open(error_path, "wb") as error_file:
+        process = subprocess.Popen(
+            [binary, "-u", str(udp_port), "-t", str(tcp_port), "-s", "5", "-d", rejected_dir, "--allow_any_fs"],
+            cwd=workdir, stdout=output_file, stderr=error_file)
+    try:
+        conn = wait_for_tcp(tcp_port, time.time() + TIMEOUT)
+        check(conn is not None, "the server serves with --allow_any_fs")
+        if conn is not None:
+            conn.close()
+    finally:
+        process.kill()
+        process.wait()
+
+    with open(error_path, "r", errors="replace") as stream:
+        output = stream.read()
+    check("file logging disabled:" not in output, "--allow_any_fs writes on a refused file system")
+    check(os.path.isfile(os.path.join(rejected_dir, "logserver.txt")),
+          "--allow_any_fs puts the log file in the directory it names")
+
+    with open(os.path.join(rejected_dir, "logserver.txt"), "r", errors="replace") as stream:
+        logged = stream.read()
+    check("File system check: disabled" in logged, "the startup log says the check is off")
 
 
 def read_ws_frame(conn, timeout=5):
@@ -360,6 +398,7 @@ def main():
 
         if sys.platform != "win32":
             check_rejected_log_dir(binary, workdir, check)
+            check_any_fs_log_dir(binary, workdir, check)
     finally:
         if process.poll() is None:
             process.kill()

@@ -200,7 +200,7 @@ bool checkTemporaryFs(const std::string &path) {
     std::snprintf(buffer, sizeof(buffer), "0x%lx", static_cast<unsigned long>(fs_info.f_type));
     reportDisabled(__FILE__, __LINE__,
                    path + " is not on tmpfs or ramfs (file system type " + buffer +
-                       "); point -d at one or use -s 0");
+                       "); point -d at one, use -s 0, or pass --allow_any_fs");
     return false;
   }
   return true;
@@ -314,7 +314,7 @@ void Logger::setLevel(Level level) {
 }
 
 bool Logger::initFile(const std::string &dir, const std::string &base_name, std::size_t max_file_size,
-                      std::size_t max_files, const std::string &suffix) {
+                      std::size_t max_files, const std::string &suffix, bool check_fs) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   // max_files == 0 means the caller does not want file logging at all (-s 0),
@@ -333,7 +333,7 @@ bool Logger::initFile(const std::string &dir, const std::string &base_name, std:
   if (!makePath(dir)) {
     return false;  // makePath reported the reason
   }
-  if (!checkTemporaryFs(dir)) {
+  if (check_fs && !checkTemporaryFs(dir)) {
     return false;  // checkTemporaryFs reported the reason
   }
 
